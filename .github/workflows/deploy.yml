@@ -1,0 +1,71 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026
+# SPDX-License-Identifier: Apache-2.0
+#
+# deploy-landing — ships the static landing page to Cloudflare Pages.
+# `main` deploys to production (supachad.com); every other branch + every
+# PR gets a preview deployment at <branch>.supachad-landing.pages.dev,
+# with the URL posted back to the PR. No build step — the site is one
+# index.html + assets/.
+
+name: deploy-landing
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+  pull-requests: write
+
+concurrency:
+  group: pages-landing-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # No build step — site is pure static (index.html + assets/)
+
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # main → supachad.com (root). Other branches → *.pages.dev preview.
+          command: >-
+            pages deploy .
+            --project-name=supachad-landing
+            --branch=${{ github.head_ref || github.ref_name }}
+
+      - name: Comment preview URL on PR
+        if: github.event_name == 'pull_request' && steps.deploy.outputs.deployment-url != ''
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            <!-- supachad-landing-preview -->
+            🌐 **Preview deployment**: ${{ steps.deploy.outputs.deployment-url }}
+            (refreshes on every push to this PR)
+          edit-mode: replace
+
+      - name: Upload artifact (no CF secret set)
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN == '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: |
+            index.html
+            assets/
+          retention-days: 7
