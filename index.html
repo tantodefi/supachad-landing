@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Supachad — an always-on agent that runs while you sleep</title>
+  <meta name="description" content="Chad is an always-on assistant that delegates safely, lives in a sandbox, and earns autonomy gradually. Built on OpenClaw, NVIDIA OpenShell, and Nemotron.">
+  <link rel="icon" type="image/svg+xml" href="/assets/chad-mark.svg">
+  <meta property="og:title" content="Supachad">
+  <meta property="og:description" content="An always-on agent that delegates safely and earns autonomy gradually.">
+  <meta property="og:image" content="/assets/chad-mark.svg">
+  <style>
+    :root {
+      --bg: #0a0e1a;
+      --bg-2: #0d1424;
+      --bg-3: #131a2e;
+      --line: #1f2937;
+      --line-2: #2a3447;
+      --fg: #e5e7eb;
+      --fg-dim: #9ca3af;
+      --fg-faint: #6b7280;
+      --accent: #f59e0b;
+      --accent-2: #fbbf24;
+      --teal: #5eead4;
+      --green: #4ade80;
+      --red: #f87171;
+      --max: 1100px;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    .mono { font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-2); text-decoration: underline; text-underline-offset: 3px; }
+
+    /* Layout */
+    .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+
+    /* Nav */
+    nav {
+      position: sticky; top: 0; z-index: 10;
+      background: rgba(10, 14, 26, 0.85);
+      backdrop-filter: saturate(140%) blur(8px);
+      border-bottom: 1px solid var(--line);
+    }
+    nav .wrap {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-top: 14px; padding-bottom: 14px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+    .brand img { width: 28px; height: 28px; }
+    .brand .word { font-family: ui-monospace, "JetBrains Mono", "SF Mono", monospace; letter-spacing: 0.04em; }
+    .nav-links a { color: var(--fg-dim); margin-left: 22px; font-size: 14px; }
+    .nav-links a:hover { color: var(--accent); text-decoration: none; }
+
+    /* Hero */
+    .hero {
+      padding: 96px 0 80px;
+      background:
+        radial-gradient(1200px 600px at 80% -10%, rgba(245, 158, 11, 0.08), transparent 60%),
+        radial-gradient(900px 500px at 0% 0%, rgba(94, 234, 212, 0.05), transparent 60%);
+    }
+    .eyebrow { color: var(--accent); font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 16px; font-family: ui-monospace, monospace; }
+    .hero h1 {
+      font-size: clamp(2.4rem, 5.8vw, 4.2rem);
+      line-height: 1.05;
+      margin: 0 0 22px;
+      letter-spacing: -0.02em;
+      font-weight: 600;
+    }
+    .hero h1 .accent { color: var(--accent); }
+    .hero .tag {
+      font-size: clamp(1.05rem, 1.6vw, 1.25rem);
+      color: var(--fg-dim);
+      max-width: 640px;
+      margin: 0 0 36px;
+    }
+    .ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-weight: 500;
+      font-size: 14px;
+      transition: transform .12s ease, background .12s ease, border-color .12s ease;
+      border: 1px solid transparent;
+    }
+    .btn-primary { background: var(--accent); color: #1a1206; }
+    .btn-primary:hover { background: var(--accent-2); text-decoration: none; transform: translateY(-1px); }
+    .btn-secondary { background: transparent; color: var(--fg); border-color: var(--line-2); }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; transform: translateY(-1px); }
+
+    /* Status pill — confidence signal that the project is alive */
+    .status {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 13px; color: var(--fg-dim);
+      padding: 6px 12px; border: 1px solid var(--line-2); border-radius: 999px;
+      margin-bottom: 24px;
+    }
+    .status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.6); animation: pulse 2.4s ease-out infinite; }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.6); }
+      70% { box-shadow: 0 0 0 8px rgba(74, 222, 128, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+    }
+
+    /* Section primitive */
+    section { padding: 72px 0; border-top: 1px solid var(--line); }
+    section h2 {
+      font-size: clamp(1.6rem, 3vw, 2.2rem);
+      margin: 0 0 12px;
+      letter-spacing: -0.01em;
+    }
+    section .lede { color: var(--fg-dim); max-width: 720px; margin: 0 0 40px; }
+
+    /* Features grid */
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    @media (max-width: 820px) { .grid-3 { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 26px;
+      transition: border-color .15s ease, transform .15s ease;
+    }
+    .card:hover { border-color: var(--line-2); transform: translateY(-2px); }
+    .card .label {
+      font-family: ui-monospace, monospace; font-size: 12px; letter-spacing: 0.16em;
+      color: var(--accent); text-transform: uppercase; margin-bottom: 14px;
+    }
+    .card h3 { margin: 0 0 10px; font-size: 1.15rem; }
+    .card p { margin: 0; color: var(--fg-dim); font-size: 14.5px; }
+
+    /* Architecture diagram (handcrafted SVG) */
+    .arch {
+      display: grid; grid-template-columns: 1.2fr 1fr; gap: 36px; align-items: center;
+    }
+    @media (max-width: 820px) { .arch { grid-template-columns: 1fr; } }
+    .arch svg { width: 100%; height: auto; }
+    .arch ul { list-style: none; padding: 0; margin: 0; }
+    .arch li {
+      padding: 10px 0;
+      border-bottom: 1px dashed var(--line);
+      display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: baseline;
+    }
+    .arch li:last-child { border-bottom: 0; }
+    .arch li b { color: var(--fg); font-weight: 600; }
+    .arch li span.k { font-family: ui-monospace, monospace; color: var(--accent); font-size: 12px; letter-spacing: 0.08em; }
+    .arch li p { margin: 4px 0 0; color: var(--fg-dim); font-size: 14px; }
+
+    /* Memory stack diagram */
+    .stack {
+      display: grid; gap: 10px; grid-template-columns: 1fr 1fr;
+    }
+    @media (max-width: 720px) { .stack { grid-template-columns: 1fr; } }
+    .stack .layer {
+      background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 18px;
+    }
+    .stack .layer .name { color: var(--accent); font-family: ui-monospace, monospace; font-size: 13px; }
+    .stack .layer h4 { margin: 6px 0 6px; font-size: 1rem; }
+    .stack .layer p { margin: 0; font-size: 14px; color: var(--fg-dim); }
+
+    /* Built on */
+    .deps {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    }
+    @media (max-width: 920px) { .deps { grid-template-columns: repeat(2, 1fr); } }
+    .dep {
+      background: var(--bg-2); border: 1px solid var(--line);
+      border-radius: 10px; padding: 18px; text-align: center;
+      transition: border-color .12s ease, transform .12s ease;
+    }
+    .dep:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .dep .wm {
+      font-family: ui-monospace, monospace;
+      font-weight: 600; letter-spacing: 0.02em;
+      font-size: 1rem; color: var(--fg); margin-bottom: 6px;
+    }
+    .dep .role { font-size: 12px; color: var(--fg-faint); }
+
+    /* Recent ships */
+    .ships { display: grid; gap: 8px; }
+    .ship {
+      display: grid; grid-template-columns: 130px 1fr; gap: 18px;
+      padding: 12px 0; border-bottom: 1px solid var(--line);
+      font-size: 14px;
+    }
+    .ship:last-child { border-bottom: 0; }
+    .ship .when { color: var(--fg-faint); font-family: ui-monospace, monospace; font-size: 12px; }
+    .ship .what b { display: block; color: var(--fg); margin-bottom: 4px; }
+    .ship .what span { color: var(--fg-dim); }
+
+    /* CTA strip */
+    .cta-strip {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(94, 234, 212, 0.04));
+      border: 1px solid var(--line-2); border-radius: 14px;
+      padding: 36px; display: flex; justify-content: space-between; align-items: center; gap: 22px;
+      flex-wrap: wrap;
+    }
+    .cta-strip h3 { margin: 0 0 6px; font-size: 1.25rem; }
+    .cta-strip p { margin: 0; color: var(--fg-dim); }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--line);
+      padding: 36px 0 56px;
+      color: var(--fg-faint);
+      font-size: 14px;
+    }
+    footer .wrap { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+    footer .links a { color: var(--fg-dim); margin-left: 18px; }
+    footer .links a:hover { color: var(--accent); text-decoration: none; }
+    footer .meta { font-family: ui-monospace, monospace; font-size: 12px; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a href="#top" class="brand" aria-label="Supachad home">
+      <img src="/assets/chad-mark.svg" alt="">
+      <span class="word">supachad</span>
+    </a>
+    <div class="nav-links">
+      <a href="https://docs.supachad.com">Docs</a>
+      <a href="#how">How it works</a>
+      <a href="#run-it">Self-host</a>
+      <a href="#built-on">Built on</a>
+      <a href="https://github.com/tantodefi/NemoClaw" target="_blank" rel="noopener">Source</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <div class="status"><span class="dot"></span> Always on.</div>
+    <div class="eyebrow">An always-on orchestrator-agent</div>
+    <h1>An agent that runs <span class="accent">while you sleep</span>.<br>Sandboxed. Budgeted. Earns autonomy gradually.</h1>
+    <p class="tag">
+      Chad reads mail every hour, drafts replies inside a kernel-isolated sandbox, delegates to typed sub-agents under per-binary network policies, and never auto-sends anything you haven't allowlisted. The autonomy roadmap is a config file. The kill switch is a single <span class="mono">touch</span>.
+    </p>
+    <div class="ctas">
+      <a class="btn btn-primary" href="https://docs.supachad.com">Read the docs →</a>
+      <a class="btn btn-secondary" href="#how">See how it works</a>
+    </div>
+  </div>
+</header>
+
+<section id="what">
+  <div class="wrap">
+    <h2>What Chad is</h2>
+    <p class="lede">Three properties that define the design — every architectural choice traces back to one of them.</p>
+    <div class="grid-3">
+      <div class="card">
+        <div class="label">Always on</div>
+        <h3>Cron is the agent's contract with the day</h3>
+        <p>Eleven standing cron jobs check mail, sweep the brain nightly, audit the budget weekly, propose memory consolidations on Saturdays, and apply narrow self-tunings daily. Each cron is a one-line wrapper invocation; heavy work happens inside the wrapper, not in the prompt. Slow jobs detach via <span class="mono">nohup</span> and report on the next run.</p>
+      </div>
+      <div class="card">
+        <div class="label">Delegates safely</div>
+        <h3>Sub-agents draft, parents publish</h3>
+        <p>Seven sub-agent kinds, each pinned to a binary path under an L7 network policy. A reviewer kind is GET-only on GitHub — it can read PR diffs but cannot post. Spawns can route to a kernel-isolated GitHub Actions runner per job for substrates where in-container execution is too coarse.</p>
+      </div>
+      <div class="card">
+        <div class="label">Earns autonomy</div>
+        <h3>Every irreversible action runs through a gate</h3>
+        <p>An <span class="mono">auto-actions.json</span> policy file is the visible map of what Chad can do today. <span class="mono">auto</span> ships immediately, <span class="mono">draft</span> parks for review, <span class="mono">block</span> means no. A kill-switch file at <span class="mono">.auto-disabled</span> halts everything in one touch.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2>Three concentric rings</h2>
+    <p class="lede">A naked CLI agent has no blast radius story. Chad runs inside three boundaries — host, container, sandbox — each with a different threat model and a different answer to "what happens if a prompt-injection rewrites the next instruction."</p>
+    <div class="arch">
+      <svg viewBox="0 0 480 320" role="img" aria-label="Three-ring isolation diagram">
+        <defs>
+          <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#0d1424"/>
+            <stop offset="100%" stop-color="#131a2e"/>
+          </linearGradient>
+        </defs>
+        <!-- outer ring (host) -->
+        <rect x="10" y="10" width="460" height="300" rx="16" fill="url(#g1)" stroke="#1f2937"/>
+        <text x="30" y="38" font-family="ui-monospace, monospace" font-size="11" fill="#9ca3af" letter-spacing="2">HOST · MACOS / LINUX</text>
+        <text x="30" y="58" font-family="ui-sans-serif, system-ui" font-size="13" fill="#e5e7eb">nemoclaw CLI · credentials · launcher</text>
+
+        <!-- middle ring (container) -->
+        <rect x="40" y="80" width="400" height="210" rx="12" fill="#0a0e1a" stroke="#2a3447" stroke-dasharray="3 4"/>
+        <text x="60" y="106" font-family="ui-monospace, monospace" font-size="11" fill="#5eead4" letter-spacing="2">CONTAINER · OPENSHELL GATEWAY</text>
+        <text x="60" y="125" font-family="ui-sans-serif, system-ui" font-size="13" fill="#e5e7eb">capsh drops · L7 proxy · OPA policy</text>
+
+        <!-- inner ring (sandbox) -->
+        <rect x="70" y="148" width="340" height="130" rx="10" fill="#0d1424" stroke="#374151"/>
+        <text x="90" y="174" font-family="ui-monospace, monospace" font-size="11" fill="#f59e0b" letter-spacing="2">SANDBOX · PER-BINARY EGRESS</text>
+        <text x="90" y="195" font-family="ui-sans-serif, system-ui" font-size="13" fill="#e5e7eb">Chad · pi · claude · gh · curl · gbrain</text>
+        <text x="90" y="214" font-family="ui-sans-serif, system-ui" font-size="13" fill="#9ca3af">7 sub-agent kinds · 11 cron jobs</text>
+        <text x="90" y="233" font-family="ui-sans-serif, system-ui" font-size="13" fill="#9ca3af">Memory: lancedb + wiki + gbrain + workspace</text>
+        <text x="90" y="252" font-family="ui-sans-serif, system-ui" font-size="13" fill="#9ca3af">Substrate: local · GitHub Actions runner</text>
+
+        <!-- arrow (gha substrate breakout) -->
+        <path d="M410 213 Q 450 213 450 250 L 450 280" stroke="#f59e0b" stroke-width="1.5" fill="none" stroke-dasharray="3 3"/>
+        <circle cx="450" cy="284" r="4" fill="#f59e0b"/>
+        <text x="395" y="304" font-family="ui-monospace, monospace" font-size="9" fill="#f59e0b">→ GHA</text>
+      </svg>
+      <ul>
+        <li>
+          <span class="k">L1 · HOST</span>
+          <div>
+            <b>nemoclaw CLI · credentials · launcher</b>
+            <p>Operator's machine. Holds creds, runs the launcher, hosts the Cloudflare tunnel.</p>
+          </div>
+        </li>
+        <li>
+          <span class="k">L2 · CONTAINER</span>
+          <div>
+            <b>OpenShell gateway · capsh drops · L7 proxy</b>
+            <p>Capability drops at entrypoint. L7 proxy validates every egress. Policy hash-checked at boot.</p>
+          </div>
+        </li>
+        <li>
+          <span class="k">L3 · SANDBOX</span>
+          <div>
+            <b>Chad + per-binary egress allowlists</b>
+            <p>Each binary is pinned to a network policy. Compromised writer can't reach GitHub. Compromised reviewer can't post.</p>
+          </div>
+        </li>
+        <li>
+          <span class="k">L3.5 · BREAKOUT</span>
+          <div>
+            <b>GitHub Actions runner per spawn</b>
+            <p>Kinds tagged <span class="mono">substrate: gha</span> spawn into a fresh runner for the job. True per-spawn isolation; loses L7 enforcement.</p>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="memory">
+  <div class="wrap">
+    <h2>Four memory layers</h2>
+    <p class="lede">Each store has a different shape and a different job. They don't compete; they layer. The decision tree for "where does this fact go" is three lines.</p>
+    <div class="stack">
+      <div class="layer">
+        <div class="name">workspace files (always-injected)</div>
+        <h4>The agent's identity</h4>
+        <p>SOUL · USER · IDENTITY · AGENTS · TOOLS · MEMORY · HEARTBEAT — char-bounded markdown loaded into every main session. Operator-owned. Never overwritten by automation.</p>
+      </div>
+      <div class="layer">
+        <div class="name">memory-lancedb (semantic LTM)</div>
+        <h4>Fuzzy episodic recall</h4>
+        <p>NVIDIA NV-Embed-v1 at 4096 dims. autoCapture fires on multilingual triggers (remember/preferences/decisions/contact). autoRecall injects relevant memories before each turn.</p>
+      </div>
+      <div class="layer">
+        <div class="name">memory-wiki (named-entity)</div>
+        <h4>Look up by name</h4>
+        <p>Obsidian-style vault in bridge mode. Page per system / correspondent / recurring topic. Backlinks form a graph. Populates organically as the agent captures structured artifacts.</p>
+      </div>
+      <div class="layer">
+        <div class="name">gbrain (cross-domain hybrid)</div>
+        <h4>Vector + graph knowledge</h4>
+        <p>PGLite-backed; subprocess CLI only (file-locked, single-process). Two books fully ingested for the fitness sub-agent kind. Daily dream cycle consolidates and re-extracts.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <h2>Highlighted features</h2>
+    <p class="lede">A non-exhaustive tour. The full surface lives in the docs.</p>
+    <div class="grid-3">
+      <div class="card">
+        <div class="label">Three feedback loops</div>
+        <h3>Curator + budget audit + proposal apply</h3>
+        <p>A weekly Hermes-style curator proposes memory consolidations (draft-only). A weekly budget-audit rolls up last-50-runs telemetry into <span class="mono">feedback-proposals.md</span>. A daily <span class="mono">chad-proposal-apply</span> applies a narrow safe-list of cron tunings — gated by <span class="mono">chad-action-gate</span>, snapshots first.</p>
+      </div>
+      <div class="card">
+        <div class="label">Popebot-style spawn</div>
+        <h3>Branch-as-job-record</h3>
+        <p>Sub-agent spawns can target a GitHub Actions runner. Each spawn is a branch in a private state repo carrying prompt + manifest; the runner commits result back. Async mode returns task_id immediately and a poller cron reconciles when the work finishes.</p>
+      </div>
+      <div class="card">
+        <div class="label">Provider routing</div>
+        <h3>NVIDIA fallback, no provider lock-in</h3>
+        <p>OpenAI-compatible binaries (codex, opencode) auto-pick OpenAI when the key is set, fall back to NVIDIA Nemotron via <span class="mono">integrate.api.nvidia.com</span> when it isn't. Claude requires Anthropic; everything else is portable.</p>
+      </div>
+      <div class="card">
+        <div class="label">Pre-mutation snapshots</div>
+        <h3>Reversible, by default</h3>
+        <p>Before the curator (or any bulk memory op) mutates anything, lancedb + wiki + workspace get tar.gz snapshots. Last 5 retained. Rollback is itself reversible — it snapshots current state first.</p>
+      </div>
+      <div class="card">
+        <div class="label">Action gate</div>
+        <h3>The autonomy boundary, in JSON</h3>
+        <p>Every external action passes through <span class="mono">chad-action-gate</span>. Per-target overrides — <span class="mono">operator@example.com: auto</span>, <span class="mono">_default: block</span>. Daily counters. Audit log. Touch <span class="mono">.auto-disabled</span> to halt everything.</p>
+      </div>
+      <div class="card">
+        <div class="label">Honest about cost</div>
+        <h3>500k tokens/day, UTC reset</h3>
+        <p>Honor-based budget (the kernel doesn't enforce — that's the inference rate-limiter's job). Every cron has a budget guard; sub-agent spawns reserve before launching. Weekly audit rolls up p95 latency by kind and proposes timeout adjustments.</p>
+      </div>
+      <div class="card">
+        <div class="label">Premium escalation</div>
+        <h3>Anthropic, behind a binary-pinned wall</h3>
+        <p>For tasks where Nemotron's depth runs out, Chad escalates to Claude through <span class="mono">chad-premium</span>. The L7 proxy pins both the wrapper *and* the curl invocation, so a compromised Python script can't reach <span class="mono">api.anthropic.com</span>. AuthContext is required; cron ticks with no inbound trigger fail closed.</p>
+      </div>
+      <div class="card">
+        <div class="label">Public roadmap</div>
+        <h3>What's deferred and why</h3>
+        <p>Phase 2 isn't a wishlist — it's a list of intentional defers. k3s-pod substrate, cron DSL, MCP hub, multi-Chad scheduling — each has a "when it'll matter" attached. A few items are out of scope on purpose; <span class="mono">github_pr_merge: auto</span> and <span class="mono">self_modify_identity: auto</span> are likely permanent.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="run-it">
+  <div class="wrap">
+    <h2>Host it on your own machine</h2>
+    <p class="lede">Chad runs in a sandbox on your hardware. The reference deployment is a Mac M4 Pro with Docker Desktop; any host that runs Linux containers with k3s or Docker works. The chat surface ships with the project — Open WebUI, behind a Cloudflare Tunnel, with Chad exposed as an OpenAI-compat model.</p>
+    <div class="grid-3">
+      <div class="card">
+        <div class="label">Chat surface, included</div>
+        <h3>Open WebUI ships in the box</h3>
+        <p>A docker-compose stack under <span class="mono">scripts/openwebui/</span> brings up Open WebUI behind a Cloudflare Tunnel and exposes Chad as a model named <span class="mono">chad</span>. Two modes: <span class="mono">--mode=quick</span> (ephemeral <span class="mono">trycloudflare.com</span>, MVP) and tunnel mode (managed CF Tunnel + Cloudflare Access SSO).</p>
+      </div>
+      <div class="card">
+        <div class="label">One brain, four surfaces</div>
+        <h3>The shim is dumb on purpose</h3>
+        <p><span class="mono">chad-shim.py</span> is ~200 lines of stdlib Python listening on <span class="mono">127.0.0.1:8901</span>. Each chat turn becomes one <span class="mono">openclaw agent</span> invocation against Chad's main session — same memory, same action gate, same network policies as a cron or a sub-agent spawn.</p>
+      </div>
+      <div class="card">
+        <div class="label">Self-healing</div>
+        <h3>launchd keeps it alive</h3>
+        <p><span class="mono">npm run webui:chad:install</span> deploys a persistent launchd LaunchAgent with <span class="mono">KeepAlive=true</span>. <span class="mono">chad-setup</span>, <span class="mono">chad-restore-from-github</span>, and <span class="mono">chad-backup-to-github</span> each self-heal a crashed shim, so any cron pulse resurrects it.</p>
+      </div>
+    </div>
+    <div class="ctas" style="margin-top: 28px;">
+      <a class="btn btn-primary" href="https://docs.supachad.com/reproducing/">Reproducing Chad →</a>
+      <a class="btn btn-secondary" href="https://docs.supachad.com/front-ends/">Front-ends docs</a>
+    </div>
+  </div>
+</section>
+
+<section id="built-on">
+  <div class="wrap">
+    <h2>Built on</h2>
+    <p class="lede">Chad is glue. The pieces below do the actual work.</p>
+    <div class="deps">
+      <a class="dep" href="https://openclaw.ai" target="_blank" rel="noopener">
+        <div class="wm">openclaw</div>
+        <div class="role">Always-on agent runtime</div>
+      </a>
+      <a class="dep" href="https://github.com/NVIDIA/OpenShell" target="_blank" rel="noopener">
+        <div class="wm">NVIDIA · OpenShell</div>
+        <div class="role">Sandbox + L7 policy gateway</div>
+      </a>
+      <a class="dep" href="https://github.com/NVIDIA/NemoClaw" target="_blank" rel="noopener">
+        <div class="wm">NVIDIA · NemoClaw</div>
+        <div class="role">Hardened sandbox blueprint</div>
+      </a>
+      <a class="dep" href="https://www.nvidia.com/en-us/ai/" target="_blank" rel="noopener">
+        <div class="wm">NVIDIA · Nemotron</div>
+        <div class="role">Embedded inference (free tier)</div>
+      </a>
+      <a class="dep" href="https://www.anthropic.com" target="_blank" rel="noopener">
+        <div class="wm">Anthropic · Claude</div>
+        <div class="role">Premium reasoning + sub-agents</div>
+      </a>
+      <a class="dep" href="https://lancedb.com" target="_blank" rel="noopener">
+        <div class="wm">LanceDB</div>
+        <div class="role">Vector store for semantic LTM</div>
+      </a>
+      <a class="dep" href="https://github.com/electric-sql/pglite" target="_blank" rel="noopener">
+        <div class="wm">PGLite</div>
+        <div class="role">Embedded Postgres for gbrain</div>
+      </a>
+      <a class="dep" href="https://docs.github.com/actions" target="_blank" rel="noopener">
+        <div class="wm">GitHub Actions</div>
+        <div class="role">Per-spawn isolated runners</div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section id="recent">
+  <div class="wrap">
+    <h2>Recent ships</h2>
+    <p class="lede">A live(-ish) feed of what landed on <span class="mono">chad-dev</span>. The full sequence is in <a href="https://docs.supachad.com/changelog">the changelog</a>.</p>
+    <div class="ships">
+      <div class="ship">
+        <div class="when">2026-05-13</div>
+        <div class="what"><b>Memory pipeline + gateway watchdog</b><span>chad-gbrain-prune weekly retention (gbrain memory/events &gt;365d, workspace digests &gt;30d, dry-run default). chad-webui-ingest daily bridges openwebui.db chats into sandbox gbrain. Dream digest surfaces Embedded/Chunks ratio + writes feedback when stale. Host launchd watchdog auto-restarts a dead gateway with 4GB heap headroom.</span></div>
+      </div>
+      <div class="ship">
+        <div class="when">2026-05-12</div>
+        <div class="what"><b>OpenWebUI auto-curated dropdown + tunnel fix</b><span>nvidia-proxy filters /v1/models to per-provider top picks via nvidia-liveness daily sweep. Disable confirmed-dead (HTTP 410 EOL) instantly; soft-disable seeded curated rows whose base model is dead. cloudflared switched to --protocol http2 — eliminates the QUIC UDP teardowns that surfaced as transient "Argo tunnel" 530s. WEBUI_SECRET_KEY pinned so container recreates don't invalidate every browser JWT.</span></div>
+      </div>
+      <div class="ship">
+        <div class="when">2026-05-11</div>
+        <div class="what"><b>Sandbox survival hardening</b><span>Bonjour mDNS plugin disabled (was crash-looping the gateway). LLM idle timeout raised to 180s for cold-start large models. feedback-proposals.md path consolidated. proton-calendar SKILL.md rewritten with cron-boundary decision table + EMAIL-POLICY link. New chad-readme § 11.5 documents the source-vs-deployed wrapper gap and the kubectl-cp recovery procedure.</span></div>
+      </div>
+      <div class="ship">
+        <div class="when">2026-05-07</div>
+        <div class="what"><b>Cron context optimization</b><span>--light-context applied to every cron — 70-82% input-token reduction on wrapper-only fires. idleTimeoutSeconds=60 bounds hung Nemotron sessions. memory-curator / spawn-poll / spawn-gc registered.</span></div>
+      </div>
+      <div class="ship">
+        <div class="when">2026-05-06</div>
+        <div class="what"><b>Phase C — async gha spawns</b><span>chad-spawn --async, chad-spawn-poll reconciler, chad-spawn-gc retention, opencode kind, --binary-override flag</span></div>
+      </div>
+      <div class="ship">
+        <div class="when">2026-05-06</div>
+        <div class="what"><b>NVIDIA fallback in agent-job runner</b><span>codex/opencode auto-route to integrate.api.nvidia.com when OPENAI_API_KEY absent; claude stays Anthropic-only</span></div>
+      </div>
+      <div class="ship">
+        <div class="when">2026-05-06</div>
+        <div class="what"><b>GHA substrate for chad-spawn</b><span>--substrate gha flag · agent-job.yml workflow template · chad-state-bootstrap installer · branch-as-job-record</span></div>
+      </div>
+      <div class="ship">
+        <div class="when">2026-05-06</div>
+        <div class="what"><b>Hermes-style memory curator</b><span>chad-memory-curator + chad-memory-snapshot · weekly draft-only consolidation pass · inactivity-gated · pre-mutation snapshots</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="cta">
+  <div class="wrap">
+    <div class="cta-strip">
+      <div>
+        <h3>Read the architecture, not just the README.</h3>
+        <p>Three concentric rings, four memory layers, seven sub-agent kinds, two substrates. It's all documented.</p>
+      </div>
+      <a class="btn btn-primary" href="https://docs.supachad.com">Open the docs →</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="meta">© chad-dev · built in a sandbox</div>
+    <div class="links">
+      <a href="https://docs.supachad.com">Docs</a>
+      <a href="https://github.com/tantodefi/NemoClaw" target="_blank" rel="noopener">Source</a>
+      <a href="https://github.com/tantodefi" target="_blank" rel="noopener">Operator</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
