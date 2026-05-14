@@ -261,7 +261,7 @@
       <div class="card">
         <div class="label">Always on</div>
         <h3>Cron is the agent's contract with the day</h3>
-        <p>Eleven standing cron jobs check mail, sweep the brain nightly, audit the budget weekly, propose memory consolidations on Saturdays, and apply narrow self-tunings daily. Each cron is a one-line wrapper invocation; heavy work happens inside the wrapper, not in the prompt. Slow jobs detach via <span class="mono">nohup</span> and report on the next run.</p>
+        <p>Twelve standing cron jobs check mail, sweep the brain nightly, audit the budget weekly, propose memory consolidations on Saturdays, apply narrow self-tunings daily, and — newest — run an autonomous experiment loop nightly that scans memory for tasks worth automating and either keeps or retires them per a regression threshold. Each cron is a one-line wrapper invocation; heavy work happens inside the wrapper, not in the prompt. Three host-side launchd watchdogs supervise the pod from outside (gateway, chat-shim, spawn-poll) so token-expensive supervision moves off the agent.</p>
       </div>
       <div class="card">
         <div class="label">Delegates safely</div>
@@ -303,7 +303,7 @@
         <rect x="70" y="148" width="340" height="130" rx="10" fill="#0d1424" stroke="#374151"/>
         <text x="90" y="174" font-family="ui-monospace, monospace" font-size="11" fill="#f59e0b" letter-spacing="2">SANDBOX · PER-BINARY EGRESS</text>
         <text x="90" y="195" font-family="ui-sans-serif, system-ui" font-size="13" fill="#e5e7eb">Chad · pi · claude · gh · curl · gbrain</text>
-        <text x="90" y="214" font-family="ui-sans-serif, system-ui" font-size="13" fill="#9ca3af">7 sub-agent kinds · 11 cron jobs</text>
+        <text x="90" y="214" font-family="ui-sans-serif, system-ui" font-size="13" fill="#9ca3af">7 sub-agent kinds · 12 cron jobs · 3 host watchdogs</text>
         <text x="90" y="233" font-family="ui-sans-serif, system-ui" font-size="13" fill="#9ca3af">Memory: lancedb + wiki + gbrain + workspace</text>
         <text x="90" y="252" font-family="ui-sans-serif, system-ui" font-size="13" fill="#9ca3af">Substrate: local · GitHub Actions runner</text>
 
