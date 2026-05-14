@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026
+# SPDX-License-Identifier: Apache-2.0
+#
+# Cloudflare Workers — static-asset binding for the supachad-landing site.
+# Pure static (index.html + assets/), no build step. `wrangler deploy`
+# ships the repo root as a Worker-served asset bundle.
+
+name = "supachad-landing"
+compatibility_date = "2026-05-01"
+workers_dev = false
+
+[assets]
+directory = "."
+not_found_handling = "single-page-application"
