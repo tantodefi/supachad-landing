@@ -499,6 +499,8 @@
     <p class="lede">A live(-ish) feed of what landed on <span class="mono">chad-dev</span>. The full sequence is in <a href="https://docs.supachad.com/changelog">the changelog</a>.</p>
     <div class="ships">
       <div class="ship">
+        <div class="when">2026-06-13</div>
+        <div class="what"><b>Nemotron 3 Ultra 550B + evolutionary experiments</b><span>Default hosted model upgraded to NVIDIA's newest open model (nemotron-3-ultra-550b-a55b); the reasoning+tool-call harness bug that pinned Super is absent in Ultra, so reasoning is on by default. New host-side Smithers runner (scripts/chad-smithers) runs an evolutionary experiment loop — start wide, score candidates in parallel, keep only what works — crash-resumable, posting the leaderboard to OpenWebUI nightly, in shadow beside chad-experiment-cron. Moshi hooks wired for phone notifications + approval; chad-tmux for phone-attachable host sessions.</span></div>
         <div class="when">2026-05-13</div>
         <div class="what"><b>Memory pipeline + gateway watchdog</b><span>chad-gbrain-prune weekly retention (gbrain memory/events &gt;365d, workspace digests &gt;30d, dry-run default). chad-webui-ingest daily bridges openwebui.db chats into sandbox gbrain. Dream digest surfaces Embedded/Chunks ratio + writes feedback when stale. Host launchd watchdog auto-restarts a dead gateway with 4GB heap headroom.</span></div>
       </div>
