@@ -244,7 +244,7 @@
     <div class="eyebrow">An always-on orchestrator-agent</div>
     <h1>An agent that runs <span class="accent">while you sleep</span>.<br>Sandboxed. Budgeted. Earns autonomy gradually.</h1>
     <p class="tag">
-      Chad reads mail every hour, drafts replies inside a kernel-isolated sandbox, delegates to typed sub-agents under per-binary network policies, and never auto-sends anything you haven't allowlisted. The autonomy roadmap is a config file. The kill switch is a single <span class="mono">touch</span>.
+      Chad reads mail every hour, drafts replies inside a kernel-isolated sandbox, delegates to typed sub-agents under per-binary network policies, and never auto-sends anything you haven't allowlisted. The autonomy boundary is a config file. The kill switch is a single <span class="mono">touch</span>.
     </p>
     <div class="ctas">
       <a class="btn btn-primary" href="https://docs.supachad.com">Read the docs →</a>
@@ -393,7 +393,7 @@
       <div class="card">
         <div class="label">Durable workflows</div>
         <h3>Two orchestrators, bridged</h3>
-        <p>Alongside one-shot sub-agents, Chad runs durable JSX workflows on <a href="https://smithers.sh" target="_blank" rel="noopener">Smithers</a> with a web IDE at <span class="mono">runs.supachad.com</span> — SQLite-backed run history, crash-resume, a <span class="mono">.jsx</span> editor, and the experiment leaderboard. <span class="mono">fusion.jsx</span> fans one prompt across every model in the NVIDIA catalog (auto-refreshed daily) then fuses the best answer. A workflow can offload a heavy step to a GHA runner over the same branch-as-job-record bridge.</p>
+        <p>Alongside one-shot sub-agents, Chad runs durable JSX workflows on <a href="https://smithers.sh" target="_blank" rel="noopener">Smithers</a> with a web IDE at <span class="mono">runs.supachad.com</span> — SQLite-backed run history, crash-resume, a <span class="mono">.jsx</span> editor, and the experiment leaderboard. The multi-step spawn + cron features are ported (issue-triage, content-pipeline, self-improve, memory-curator, log-digest) — crash-resumable, with approval gates, shadow-safe by default. A <span class="mono">runSpawn()</span> bridge offloads heavy steps to a GHA runner over the same branch-as-job-record machinery. <span class="mono">fusion.jsx</span> fans one prompt across every model in the NVIDIA catalog (auto-refreshed daily) then fuses the best answer.</p>
       </div>
       <div class="card">
         <div class="label">Provider routing</div>
@@ -421,9 +421,9 @@
         <p>For tasks where Nemotron's depth runs out, Chad escalates to Claude through <span class="mono">chad-premium</span>. The L7 proxy pins both the wrapper *and* the curl invocation, so a compromised Python script can't reach <span class="mono">api.anthropic.com</span>. AuthContext is required; cron ticks with no inbound trigger fail closed.</p>
       </div>
       <div class="card">
-        <div class="label">Public roadmap</div>
-        <h3>What's deferred and why</h3>
-        <p>Phase 2 isn't a wishlist — it's a list of intentional defers. k3s-pod substrate, cron DSL, MCP hub, multi-Chad scheduling — each has a "when it'll matter" attached. A few items are out of scope on purpose; <span class="mono">github_pr_merge: auto</span> and <span class="mono">self_modify_identity: auto</span> are likely permanent.</p>
+        <div class="label">Deliberate non-goals</div>
+        <h3>What Chad won't do, on purpose</h3>
+        <p>Some limits are permanent by design, not gaps. <span class="mono">github_pr_merge: auto</span> stays blocked (a merge is irreversible and synthesizes CI signal humans should gate). <span class="mono">self_modify_identity: auto</span> stays operator-only (<span class="mono">SOUL.md</span> / <span class="mono">IDENTITY.md</span> / <span class="mono">USER.md</span> are yours). And Chad-as-a-product: this is a single-operator agent, not a multi-tenant service.</p>
       </div>
     </div>
   </div>
@@ -530,7 +530,7 @@
       </div>
       <div class="ship">
         <div class="when">2026-05-06</div>
-        <div class="what"><b>Phase C — async gha spawns</b><span>chad-spawn --async, chad-spawn-poll reconciler, chad-spawn-gc retention, opencode kind, --binary-override flag</span></div>
+        <div class="what"><b>Async GHA spawns</b><span>chad-spawn --async, chad-spawn-poll reconciler, chad-spawn-gc retention, opencode kind, --binary-override flag</span></div>
       </div>
       <div class="ship">
         <div class="when">2026-05-06</div>
