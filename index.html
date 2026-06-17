@@ -266,7 +266,7 @@
       <div class="card">
         <div class="label">Delegates safely</div>
         <h3>Sub-agents draft, parents publish</h3>
-        <p>Seven sub-agent kinds, each pinned to a binary path under an L7 network policy. A reviewer kind is GET-only on GitHub — it can read PR diffs but cannot post. Spawns can route to a kernel-isolated GitHub Actions runner per job for substrates where in-container execution is too coarse.</p>
+        <p>Seven sub-agent kinds, each pinned to a binary path under an L7 network policy. A reviewer kind is GET-only on GitHub — it can read PR diffs but cannot post. Spawns can route to a kernel-isolated GitHub Actions runner per job for substrates where in-container execution is too coarse. Multi-step work runs as durable Smithers workflows with crash-resume and approval gates — a second orchestrator bridged to the same spawn substrate.</p>
       </div>
       <div class="card">
         <div class="label">Earns autonomy</div>
@@ -391,6 +391,11 @@
         <p>Sub-agent spawns can target a GitHub Actions runner. Each spawn is a branch in a private state repo carrying prompt + manifest; the runner commits result back. Async mode returns task_id immediately and a poller cron reconciles when the work finishes.</p>
       </div>
       <div class="card">
+        <div class="label">Durable workflows</div>
+        <h3>Two orchestrators, bridged</h3>
+        <p>Alongside one-shot sub-agents, Chad runs durable JSX workflows on <a href="https://smithers.sh" target="_blank" rel="noopener">Smithers</a> with a web IDE at <span class="mono">runs.supachad.com</span> — SQLite-backed run history, crash-resume, a <span class="mono">.jsx</span> editor, and the experiment leaderboard. <span class="mono">fusion.jsx</span> fans one prompt across every model in the NVIDIA catalog (auto-refreshed daily) then fuses the best answer. A workflow can offload a heavy step to a GHA runner over the same branch-as-job-record bridge.</p>
+      </div>
+      <div class="card">
         <div class="label">Provider routing</div>
         <h3>NVIDIA fallback, no provider lock-in</h3>
         <p>OpenAI-compatible binaries (codex, opencode) auto-pick OpenAI when the key is set, fall back to NVIDIA Nemotron via <span class="mono">integrate.api.nvidia.com</span> when it isn't. Claude requires Anthropic; everything else is portable.</p>
@@ -427,7 +432,7 @@
 <section id="run-it">
   <div class="wrap">
     <h2>Host it on your own machine</h2>
-    <p class="lede">Chad runs in a sandbox on your hardware. The reference deployment is a Mac M4 Pro with Docker Desktop; any host that runs Linux containers with k3s or Docker works. The chat surface ships with the project — Open WebUI, behind a Cloudflare Tunnel, with Chad exposed as an OpenAI-compat model.</p>
+    <p class="lede">Chad runs in a sandbox on your hardware. The reference deployment is a Mac M4 Pro with Docker Desktop; any host that runs Linux containers with k3s or Docker works. Two surfaces ship with the project: the chat surface (Open WebUI, behind a Cloudflare Tunnel, with Chad exposed as an OpenAI-compat model) and the workflow surface (the runs IDE for durable Smithers runs).</p>
     <div class="grid-3">
       <div class="card">
         <div class="label">Chat surface, included</div>
@@ -448,6 +453,7 @@
     <div class="ctas" style="margin-top: 28px;">
       <a class="btn btn-primary" href="https://docs.supachad.com/reproducing/">Reproducing Chad →</a>
       <a class="btn btn-secondary" href="https://docs.supachad.com/front-ends/">Front-ends docs</a>
+      <a class="btn btn-secondary" href="https://docs.supachad.com/runs-ide/">Runs IDE docs</a>
     </div>
   </div>
 </section>
@@ -470,8 +476,12 @@
         <div class="role">Hardened sandbox blueprint</div>
       </a>
       <a class="dep" href="https://www.nvidia.com/en-us/ai/" target="_blank" rel="noopener">
-        <div class="wm">NVIDIA · Nemotron</div>
-        <div class="role">Embedded inference (free tier)</div>
+        <div class="wm">NVIDIA · Nemotron 3</div>
+        <div class="role">Ultra 550B hosted · Super 120B self-hosted</div>
+      </a>
+      <a class="dep" href="https://smithers.sh" target="_blank" rel="noopener">
+        <div class="wm">Smithers</div>
+        <div class="role">Durable workflow orchestrator</div>
       </a>
       <a class="dep" href="https://www.anthropic.com" target="_blank" rel="noopener">
         <div class="wm">Anthropic · Claude</div>
@@ -499,6 +509,8 @@
     <p class="lede">A live(-ish) feed of what landed on <span class="mono">chad-dev</span>. The full sequence is in <a href="https://docs.supachad.com/changelog">the changelog</a>.</p>
     <div class="ships">
       <div class="ship">
+        <div class="when">2026-06-16</div>
+        <div class="what"><b>Runs IDE for Smithers workflows + model fusion</b><span>A web IDE at runs.supachad.com (serve-runs.js, Hono over the Smithers SQLite DBs): run history, live task tree, a CodeMirror .jsx editor, the experiment leaderboard, and browser launch/cancel/approve/fork — fail-closed behind Cloudflare Access. Chad drives the same API headlessly via the chad-runs CLI. New fusion.jsx runs a prompt across N models in parallel then fuses them (best-of-breed), with the roster auto-refreshed daily from NVIDIA's /v1/models. Settled the orchestrator question: keep both chad-spawn (one-shot, GHA-isolated) and chad-Smithers (durable workflows), bridged so a workflow can offload a heavy step to a GH runner.</span></div>
         <div class="when">2026-06-13</div>
         <div class="what"><b>Nemotron 3 Ultra 550B + evolutionary experiments</b><span>Default hosted model upgraded to NVIDIA's newest open model (nemotron-3-ultra-550b-a55b); the reasoning+tool-call harness bug that pinned Super is absent in Ultra, so reasoning is on by default. New host-side Smithers runner (scripts/chad-smithers) runs an evolutionary experiment loop — start wide, score candidates in parallel, keep only what works — crash-resumable, posting the leaderboard to OpenWebUI nightly, in shadow beside chad-experiment-cron. Moshi hooks wired for phone notifications + approval; chad-tmux for phone-attachable host sessions.</span></div>
         <div class="when">2026-05-13</div>
