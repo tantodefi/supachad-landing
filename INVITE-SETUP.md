@@ -57,6 +57,37 @@ real `chad` access:
 - **Redeem:** the user opens `/invite/<token>` → email added to CF Access
   (queued until `CF_ACCESS_READY=1`); premium tier recorded to KV `premium:<email>`.
 
+## Paywall (Square) — `POST /api/square/checkout` + `POST /api/square/webhook`
+
+Square is the active payment processor (sandbox-first). The flow:
+`POST /api/square/checkout {email, plan}` → Square hosted-checkout URL → customer
+pays → Square webhook → premium grant and/or credit top-up.
+
+**Verified working in sandbox:** token valid, location `L87VN9AXAYKQG` (CAD),
+`CreatePaymentLink` returns a real `sandbox.square.link` URL, and the webhook HMAC
+scheme matches Square's spec.
+
+**Plans** (`SQUARE_PLANS` in worker.js): `premium` ($5 → premium grant),
+`credits_1k` ($5 → +1000 credits), `credits_5k` ($20 → +5000). Edit freely.
+
+**Setup:**
+1. Secrets: `wrangler secret put SQUARE_ACCESS_TOKEN` (the sandbox `EAAA…` token),
+   `wrangler secret put SQUARE_WEBHOOK_SIGNATURE_KEY` (see step 3).
+2. Vars already in `wrangler.toml`: `SQUARE_ENV=sandbox`, `SQUARE_LOCATION_ID`,
+   `SQUARE_CURRENCY=CAD`.
+3. **Webhook subscription** — Square Developer Dashboard → your app → Webhooks →
+   Subscriptions → Add: URL `https://supachad.com/api/square/webhook`, API version
+   `2025-01-23`, events **`payment.created`** + **`payment.updated`**. Copy the
+   **Signature Key** → that's `SQUARE_WEBHOOK_SIGNATURE_KEY`.
+4. `wrangler deploy`. Test with Square's sandbox test cards.
+
+**Credits** are recorded in KV `credits:<email>` (`{balance}`). Deduction/metering is
+the shim's job (billing roadmap, task #33) — this worker only tops up the balance.
+
+**Going live:** flip `SQUARE_ENV=production`, set `SQUARE_LOCATION_ID` to your real
+location, swap `SQUARE_ACCESS_TOKEN` to the production token, and add a production
+webhook subscription (its own signature key).
+
 ## Paywall (Stripe) — `POST /api/stripe/webhook`
 1. Create a Stripe **Payment Link** (or Checkout) for the premium plan; set its
    success URL to `https://chad.supachad.com`.

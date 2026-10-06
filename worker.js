@@ -13,7 +13,17 @@
 //   POST /api/invite/mint      {email, tier}   → admin-only; mints a single-use token (KV)
 //   GET  /invite/<token>                        → redeem: one-time; grants access
 //   POST /api/stripe/webhook                    → paid checkout → premium (sig-verified)
+//   POST /api/square/checkout  {email, plan}    → returns a Square hosted-checkout URL
+//   POST /api/square/webhook                    → paid → premium/credits (sig-verified)
 //   GET  /api/premium/list                      → admin-only; emails for pod allowlist sync
+//
+// Square bindings (wrangler.toml vars + secrets):
+//   var    SQUARE_ENV              "sandbox" (default) | "production"
+//   var    SQUARE_LOCATION_ID      e.g. L87VN9AXAYKQG (sandbox default test account)
+//   var    SQUARE_CURRENCY         default "CAD"
+//   secret SQUARE_ACCESS_TOKEN     sandbox/prod access token (EAAA…)
+//   secret SQUARE_WEBHOOK_SIGNATURE_KEY  from the dashboard webhook subscription
+//   var    SQUARE_WEBHOOK_URL      exact subscribed URL (defaults to this route's origin)
 //
 // Access grant on redeem:
 //   1. Adds the email to the Cloudflare Access policy via the CF API —
@@ -90,6 +100,87 @@ async function addToCloudflareAccess(env, email) {
   return put.success ? { applied: true } : { applied: false, error: "policy_write_failed", detail: put.errors };
 }
 
+// ── Square (payments) ────────────────────────────────────────────────────────
+// Plans map a checkout to an outcome: a premium grant and/or a credit top-up.
+// Amounts are in the smallest currency unit (cents). Adjust freely.
+const SQUARE_PLANS = {
+  premium:       { name: "Chad Premium",            amount: 500,  grant: "premium" },
+  credits_1k:    { name: "Chad Credits — 1,000",    amount: 500,  credits: 1000 },
+  credits_5k:    { name: "Chad Credits — 5,000",    amount: 2000, credits: 5000 },
+};
+
+function squareBase(env) {
+  return env.SQUARE_ENV === "production"
+    ? "https://connect.squareup.com"
+    : "https://connect.squareupsandbox.com";
+}
+
+async function squareCreatePaymentLink(env, plan, email, origin) {
+  const p = SQUARE_PLANS[plan];
+  if (!p) return { error: "unknown_plan" };
+  const body = {
+    idempotency_key: crypto.randomUUID(),
+    quick_pay: {
+      name: p.name,
+      price_money: { amount: p.amount, currency: env.SQUARE_CURRENCY || "CAD" },
+      location_id: env.SQUARE_LOCATION_ID,
+    },
+    checkout_options: { redirect_url: `${origin}/?paid=1` },
+    pre_populated_data: { buyer_email: email },
+  };
+  const r = await fetch(`${squareBase(env)}/v2/online-checkout/payment-links`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.SQUARE_ACCESS_TOKEN}`,
+      "Square-Version": "2025-01-23",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const d = await r.json();
+  if (d.errors) return { error: "square_create_failed", detail: d.errors };
+  const pl = d.payment_link;
+  // Map order_id → {email, plan} so the webhook knows who paid for what.
+  if (pl.order_id) {
+    await env.INVITES.put(`sqorder:${pl.order_id}`, JSON.stringify({ email, plan, ts: Date.now() }), { expirationTtl: 7 * 86400 });
+  }
+  return { url: pl.url, order_id: pl.order_id, id: pl.id };
+}
+
+function b64(buf) {
+  let s = "";
+  const b = new Uint8Array(buf);
+  for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+  return btoa(s);
+}
+
+async function verifySquareSig(rawBody, sigHeader, key, notificationUrl) {
+  // Square signs HMAC-SHA256(key, notificationUrl + rawBody), base64-encoded;
+  // header x-square-hmacsha256-signature. notificationUrl must match the dashboard
+  // subscription URL exactly.
+  if (!sigHeader || !key) return false;
+  const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const mac = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(notificationUrl + rawBody));
+  return ctEqual(b64(mac), sigHeader);
+}
+
+// Apply a paid plan: premium grant and/or credit top-up (balance in KV credits:<email>).
+async function applySquarePlan(env, email, plan, source) {
+  const p = SQUARE_PLANS[plan] || {};
+  const out = { plan };
+  if (p.grant === "premium") out.grant = await grantPremium(env, email, source);
+  if (p.credits) {
+    const cur = JSON.parse((await env.INVITES.get(`credits:${email}`)) || '{"balance":0}');
+    cur.balance = (cur.balance || 0) + p.credits;
+    cur.ts = Date.now();
+    cur.source = source;
+    await env.INVITES.put(`credits:${email}`, JSON.stringify(cur));
+    out.credits_added = p.credits;
+    out.balance = cur.balance;
+  }
+  return out;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -159,6 +250,48 @@ export default {
         return j({ ok: true, note: "no email on session" }); // still 200 so Stripe stops retrying
       }
       return j({ ok: true, ignored: evt.type }); // ack unhandled events
+    }
+
+    // ── Square: create a hosted checkout link ────────────────────────────────
+    // POST {email, plan} → returns {url}. plan ∈ SQUARE_PLANS (default "premium").
+    if (request.method === "POST" && pathname === "/api/square/checkout") {
+      const { email, plan } = await request.json().catch(() => ({}));
+      const chosen = plan || "premium";
+      if (!validEmail(email)) return j({ ok: false, error: "invalid_email" }, 400);
+      if (!SQUARE_PLANS[chosen]) return j({ ok: false, error: "unknown_plan", plans: Object.keys(SQUARE_PLANS) }, 400);
+      if (!env.SQUARE_ACCESS_TOKEN || !env.SQUARE_LOCATION_ID) return j({ ok: false, error: "square_not_configured" }, 503);
+      const res = await squareCreatePaymentLink(env, chosen, email.toLowerCase(), url.origin);
+      if (res.error) return j({ ok: false, ...res }, 502);
+      return j({ ok: true, url: res.url });
+    }
+
+    // ── Square webhook: paid → premium / credits (sig-verified) ──────────────
+    if (request.method === "POST" && pathname === "/api/square/webhook") {
+      const raw = await request.text();
+      const notifUrl = env.SQUARE_WEBHOOK_URL || `${url.origin}/api/square/webhook`;
+      const ok = await verifySquareSig(raw, request.headers.get("x-square-hmacsha256-signature"), env.SQUARE_WEBHOOK_SIGNATURE_KEY, notifUrl);
+      if (!ok) return j({ ok: false, error: "bad_signature" }, 400);
+      let evt;
+      try { evt = JSON.parse(raw); } catch { return j({ ok: false, error: "bad_json" }, 400); }
+      const type = evt.type || "";
+      if (type === "payment.created" || type === "payment.updated") {
+        const pay = evt.data?.object?.payment || {};
+        if (pay.status === "COMPLETED") {
+          const orderId = pay.order_id;
+          let email = pay.buyer_email_address;
+          let plan = "premium";
+          if (orderId) {
+            const m = await env.INVITES.get(`sqorder:${orderId}`);
+            if (m) { const o = JSON.parse(m); email = o.email || email; plan = o.plan || plan; }
+          }
+          if (validEmail(email)) {
+            const applied = await applySquarePlan(env, email.toLowerCase(), plan, `square:${type}`);
+            return j({ ok: true, email, ...applied });
+          }
+          return j({ ok: true, note: "no email resolved" }); // 200 so Square stops retrying
+        }
+      }
+      return j({ ok: true, ignored: type });
     }
 
     // ── Premium list (admin only) → pod allowlist sync bridge ────────────────
