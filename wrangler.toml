@@ -26,6 +26,13 @@ routes = [
 # calling the CF API (redemption still succeeds; the user is told they're queued).
 CF_ACCESS_READY = "0"
 
+# ── Square (payments) ──────────────────────────────────────────────────────
+SQUARE_ENV = "sandbox"                 # flip to "production" when going live
+SQUARE_LOCATION_ID = "L87VN9AXAYKQG"   # sandbox "Default Test Account" (CAD); replace for prod
+SQUARE_CURRENCY = "CAD"
+# SQUARE_WEBHOOK_URL defaults to this route's origin; set it if the subscribed
+# dashboard URL differs (it must match EXACTLY for signature verification).
+
 # KV for signup requests + single-use invite tokens + premium grants.
 # Create once:  wrangler kv namespace create INVITES   (then paste the id below)
 [[kv_namespaces]]
@@ -35,6 +42,8 @@ id = "REPLACE_WITH_KV_NAMESPACE_ID"
 # Secrets (set via `wrangler secret put <NAME>`, never in this file):
 #   ADMIN_SECRET      — required header X-Admin-Secret to mint invites + read /api/premium/list
 #   STRIPE_WEBHOOK_SECRET — whsec_… from the Stripe webhook endpoint (paywall)
+#   SQUARE_ACCESS_TOKEN   — sandbox/prod access token (EAAA…); matches SQUARE_ENV
+#   SQUARE_WEBHOOK_SIGNATURE_KEY — from the dashboard webhook subscription (verifies events)
 #   CF_API_TOKEN      — token WITH Access:Apps and Policies:Edit (mint a dedicated one)
 #   CF_ACCOUNT_ID     — Cloudflare account id
 #   CF_ACCESS_APP_ID  — the chad.supachad.com Access application id
