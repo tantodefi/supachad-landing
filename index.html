@@ -96,6 +96,42 @@
     .btn-primary:hover { background: var(--accent-2); text-decoration: none; transform: translateY(-1px); }
     .btn-secondary { background: transparent; color: var(--fg); border-color: var(--line-2); }
     .btn-secondary:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; transform: translateY(-1px); }
+    .nav-cta { padding: 7px 14px; border-radius: 8px; background: var(--accent); color: #1a1206 !important; font-weight: 600; }
+    .nav-cta:hover { background: var(--accent-2); text-decoration: none; }
+
+    /* ── Pricing ─────────────────────────────────────────────── */
+    .price-card { position: relative; background: var(--bg-2); border: 1px solid var(--line); border-radius: 14px; padding: 26px; display: flex; flex-direction: column; }
+    .price-card.featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .price-card .ribbon { position: absolute; top: -11px; left: 26px; background: var(--accent); color: #1a1206; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 10px; border-radius: 6px; }
+    .price-card .tier { font-family: ui-monospace, monospace; color: var(--accent); font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; }
+    .price-card .amount { font-size: 34px; font-weight: 700; margin: 10px 0 2px; }
+    .price-card .amount small { font-size: 14px; color: var(--fg-dim); font-weight: 400; }
+    .price-card ul { list-style: none; padding: 0; margin: 16px 0 22px; display: grid; gap: 9px; }
+    .price-card li { color: var(--fg-dim); font-size: 14px; padding-left: 22px; position: relative; }
+    .price-card li::before { content: "→"; position: absolute; left: 0; color: var(--teal); }
+    .price-card .btn { margin-top: auto; width: 100%; justify-content: center; }
+
+    /* ── Onboarding steps + signup ───────────────────────────── */
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 8px 0 34px; counter-reset: s; }
+    @media (max-width: 720px) { .steps { grid-template-columns: 1fr; } }
+    .steps .step { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+    .steps .step .n { counter-increment: s; font-family: ui-monospace, monospace; color: var(--accent); font-size: 13px; }
+    .steps .step .n::before { content: counter(s) "/3"; }
+    .steps .step h4 { margin: 8px 0 6px; font-size: 16px; }
+    .steps .step p { color: var(--fg-dim); font-size: 14px; margin: 0; }
+    .signup { background: var(--bg-2); border: 1px solid var(--line); border-radius: 14px; padding: 28px; max-width: 560px; }
+    .signup .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .signup input[type=email] { flex: 1 1 240px; background: var(--bg); border: 1px solid var(--line-2); border-radius: 9px; padding: 12px 14px; color: var(--fg); font-size: 15px; font-family: inherit; }
+    .signup input[type=email]:focus { outline: none; border-color: var(--accent); }
+    .signup .plan-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 4px; }
+    .signup .plan { flex: 1 1 120px; text-align: center; cursor: pointer; border: 1px solid var(--line-2); border-radius: 9px; padding: 10px; font-size: 14px; color: var(--fg-dim); background: var(--bg); }
+    .signup .plan.sel { border-color: var(--accent); color: var(--fg); }
+    .signup .plan b { display: block; color: var(--fg); }
+    .signup .msg { margin-top: 14px; font-size: 14px; min-height: 20px; }
+    .signup .msg.ok { color: var(--green); }
+    .signup .msg.err { color: var(--red); }
+    .signup .next { display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+    .signup .next.show { display: block; }
 
     /* Status pill — confidence signal that the project is alive */
     .status {
@@ -232,8 +268,9 @@
       <a href="https://docs.supachad.com">Docs</a>
       <a href="#how">How it works</a>
       <a href="#run-it">Self-host</a>
-      <a href="#built-on">Built on</a>
+      <a href="#pricing">Pricing</a>
       <a href="https://github.com/tantodefi/supachad" target="_blank" rel="noopener">Source</a>
+      <a class="nav-cta" href="https://chad.supachad.com">Launch app ↗</a>
     </div>
   </div>
 </nav>
@@ -247,9 +284,11 @@
       Chad reads mail every hour, drafts replies inside a kernel-isolated sandbox, delegates to typed sub-agents under per-binary network policies, and never auto-sends anything you haven't allowlisted. The autonomy boundary is a config file. The kill switch is a single <span class="mono">touch</span>.
     </p>
     <div class="ctas">
-      <a class="btn btn-primary" href="https://docs.supachad.com">Read the docs →</a>
-      <a class="btn btn-secondary" href="#how">See how it works</a>
+      <a class="btn btn-primary" href="#get-started">Start free →</a>
+      <a class="btn btn-secondary" href="https://chad.supachad.com">Launch app ↗</a>
+      <a class="btn btn-secondary" href="https://docs.supachad.com">Docs</a>
     </div>
+    <p class="tag" style="margin-top:14px;font-size:14px;color:var(--fg-faint)">Free tier: 50 messages a day. No card required. Top up with credits or go premium anytime.</p>
   </div>
 </header>
 
@@ -561,14 +600,124 @@
   </div>
 </section>
 
+<section id="pricing">
+  <div class="wrap">
+    <h2>Pricing</h2>
+    <p class="lede">Start free with a daily credit allowance. Top up pay-as-you-go when you need more, or go premium for the unlimited agent. No card to start.</p>
+    <div class="grid-3">
+      <div class="price-card">
+        <div class="tier">Free</div>
+        <div class="amount">$0</div>
+        <ul>
+          <li>50 free messages a day (Chad Lite)</li>
+          <li>Resets at 00:00 UTC — no card required</li>
+          <li>Web search + per-user memory</li>
+          <li>When you run out, top up or upgrade</li>
+        </ul>
+        <a class="btn btn-secondary" href="#get-started" onclick="pickPlan('free')">Start free</a>
+      </div>
+      <div class="price-card">
+        <div class="tier">Credits</div>
+        <div class="amount">from $5 <small>pay-as-you-go</small></div>
+        <ul>
+          <li>1 credit = 1 message, no daily cap</li>
+          <li>Packs of 1,000 or 5,000 credits</li>
+          <li>Credits never expire</li>
+          <li>Secure checkout via Square</li>
+        </ul>
+        <a class="btn btn-secondary" href="#get-started" onclick="pickPlan('credits_1k')">Buy credits</a>
+      </div>
+      <div class="price-card featured">
+        <div class="ribbon">Most capable</div>
+        <div class="tier">Premium</div>
+        <div class="amount">Chad <small>full agent</small></div>
+        <ul>
+          <li>The full Chad agent — unlimited, no cap</li>
+          <li>Memory, automations &amp; sub-agents</li>
+          <li>Priority model access</li>
+          <li>Cancel anytime</li>
+        </ul>
+        <a class="btn btn-primary" href="#get-started" onclick="pickPlan('premium')">Go premium</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="get-started">
+  <div class="wrap">
+    <h2>Get started</h2>
+    <p class="lede">Three steps from here to a running agent.</p>
+    <div class="steps">
+      <div class="step"><div class="n"></div><h4>Create your account</h4><p>Drop your email below and pick a plan. Free needs no card.</p></div>
+      <div class="step"><div class="n"></div><h4>Get access</h4><p>We provision your login and email you an access link to the app.</p></div>
+      <div class="step"><div class="n"></div><h4>Launch &amp; chat</h4><p>Open the app, start chatting. Free gives you 50 messages a day; buy credits or go premium for more.</p></div>
+    </div>
+    <div class="signup">
+      <div class="plan-row" id="plan-row">
+        <div class="plan sel" data-plan="free"><b>Free</b>50 msgs/day</div>
+        <div class="plan" data-plan="credits_1k"><b>Credits</b>pay-as-you-go</div>
+        <div class="plan" data-plan="premium"><b>Premium</b>unlimited</div>
+      </div>
+      <div class="row">
+        <input type="email" id="su-email" placeholder="you@email.com" autocomplete="email" />
+        <button class="btn btn-primary" id="su-btn" onclick="submitSignup()">Create account</button>
+      </div>
+      <div class="msg" id="su-msg"></div>
+      <div class="next" id="su-next">
+        <p style="margin:0 0 12px">You're set. Launch the app once your access link arrives:</p>
+        <a class="btn btn-primary" href="https://chad.supachad.com">Launch Chad ↗</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  let suPlan = "free";
+  function pickPlan(p) {
+    suPlan = p;
+    document.querySelectorAll("#plan-row .plan").forEach(function (el) {
+      el.classList.toggle("sel", el.dataset.plan === p);
+    });
+    var btn = document.getElementById("su-btn");
+    if (btn) btn.textContent = p === "free" ? "Create account" : "Continue to checkout";
+  }
+  document.querySelectorAll("#plan-row .plan").forEach(function (el) {
+    el.addEventListener("click", function () { pickPlan(el.dataset.plan); });
+  });
+  async function submitSignup() {
+    var email = (document.getElementById("su-email").value || "").trim();
+    var msg = document.getElementById("su-msg");
+    var next = document.getElementById("su-next");
+    msg.className = "msg"; next.classList.remove("show");
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { msg.className = "msg err"; msg.textContent = "Please enter a valid email."; return; }
+    msg.textContent = "Working…";
+    try {
+      if (suPlan === "free") {
+        var r = await fetch("/api/signup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: email }) });
+        var d = await r.json();
+        if (d.ok) { msg.className = "msg ok"; msg.textContent = "You're on the list — we'll email your access link shortly."; next.classList.add("show"); }
+        else { msg.className = "msg err"; msg.textContent = "Something went wrong. Try again."; }
+      } else {
+        var r2 = await fetch("/api/square/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: email, plan: suPlan }) });
+        var d2 = await r2.json();
+        if (d2.ok && d2.url) { msg.className = "msg ok"; msg.textContent = "Redirecting to secure checkout…"; window.location.href = d2.url; }
+        else { msg.className = "msg err"; msg.textContent = "Couldn't start checkout. Try again."; }
+      }
+    } catch (e) { msg.className = "msg err"; msg.textContent = "Network error. Try again."; }
+  }
+</script>
+
 <section id="cta">
   <div class="wrap">
     <div class="cta-strip">
       <div>
-        <h3>Read the architecture, not just the README.</h3>
-        <p>Three concentric rings, four memory layers, seven sub-agent kinds, two substrates. It's all documented.</p>
+        <h3>Spin up your always-on agent.</h3>
+        <p>50 free messages a day, no card. Top up or go premium when you're ready.</p>
       </div>
-      <a class="btn btn-primary" href="https://docs.supachad.com">Open the docs →</a>
+      <div class="ctas">
+        <a class="btn btn-primary" href="#get-started">Start free →</a>
+        <a class="btn btn-secondary" href="https://chad.supachad.com">Launch app ↗</a>
+      </div>
     </div>
   </div>
 </section>
