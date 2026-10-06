@@ -266,10 +266,14 @@ export default {
     }
 
     // ── Square webhook: paid → premium / credits (sig-verified) ──────────────
-    if (request.method === "POST" && pathname === "/api/square/webhook") {
+    // Square forbids the same URL for both environments, so production subscribes
+    // to /api/square/webhook/prod (its own signature key). Both share grant logic.
+    if (request.method === "POST" && (pathname === "/api/square/webhook" || pathname === "/api/square/webhook/prod")) {
+      const isProd = pathname.endsWith("/prod");
+      const sigKey = isProd ? env.SQUARE_WEBHOOK_SIGNATURE_KEY_PROD : env.SQUARE_WEBHOOK_SIGNATURE_KEY;
       const raw = await request.text();
-      const notifUrl = env.SQUARE_WEBHOOK_URL || `${url.origin}/api/square/webhook`;
-      const ok = await verifySquareSig(raw, request.headers.get("x-square-hmacsha256-signature"), env.SQUARE_WEBHOOK_SIGNATURE_KEY, notifUrl);
+      const notifUrl = (isProd ? env.SQUARE_WEBHOOK_URL_PROD : env.SQUARE_WEBHOOK_URL) || `${url.origin}${pathname}`;
+      const ok = await verifySquareSig(raw, request.headers.get("x-square-hmacsha256-signature"), sigKey, notifUrl);
       if (!ok) return j({ ok: false, error: "bad_signature" }, 400);
       let evt;
       try { evt = JSON.parse(raw); } catch { return j({ ok: false, error: "bad_json" }, 400); }
@@ -292,6 +296,38 @@ export default {
         }
       }
       return j({ ok: true, ignored: type });
+    }
+
+    // ── Credits: consume (admin; called per-message by the OWUI rate-limit filter) ──
+    // NOTE: CF KV read-modify-write is not atomic; concurrent messages for one user
+    // could race (minor double-spend). Acceptable at low per-user concurrency; move to
+    // Durable Objects / D1 if strict accounting is ever required.
+    if (request.method === "POST" && pathname === "/api/credits/consume") {
+      if (!env.ADMIN_SECRET || request.headers.get("X-Admin-Secret") !== env.ADMIN_SECRET) {
+        return j({ ok: false, error: "unauthorized" }, 401);
+      }
+      const { email, amount } = await request.json().catch(() => ({}));
+      if (!validEmail(email)) return j({ ok: false, error: "invalid_email" }, 400);
+      const n = Math.max(1, Math.floor(Number(amount) || 1));
+      const key = `credits:${email.toLowerCase()}`;
+      const cur = JSON.parse((await env.INVITES.get(key)) || '{"balance":0}');
+      const bal = cur.balance || 0;
+      if (bal < n) return j({ ok: false, error: "insufficient", balance: bal }, 402);
+      cur.balance = bal - n;
+      cur.ts = Date.now();
+      await env.INVITES.put(key, JSON.stringify(cur));
+      return j({ ok: true, balance: cur.balance, consumed: n });
+    }
+
+    // ── Credits: balance lookup (admin) ──────────────────────────────────────
+    if (request.method === "GET" && pathname.startsWith("/api/credits/")) {
+      if (!env.ADMIN_SECRET || request.headers.get("X-Admin-Secret") !== env.ADMIN_SECRET) {
+        return j({ ok: false, error: "unauthorized" }, 401);
+      }
+      const email = decodeURIComponent(pathname.slice("/api/credits/".length));
+      if (!validEmail(email)) return j({ ok: false, error: "invalid_email" }, 400);
+      const cur = JSON.parse((await env.INVITES.get(`credits:${email.toLowerCase()}`)) || '{"balance":0}');
+      return j({ ok: true, email, balance: cur.balance || 0 });
     }
 
     // ── Premium list (admin only) → pod allowlist sync bridge ────────────────
