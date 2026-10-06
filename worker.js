@@ -164,19 +164,29 @@ async function verifySquareSig(rawBody, sigHeader, key, notificationUrl) {
   return ctEqual(b64(mac), sigHeader);
 }
 
-// Apply a paid plan: premium grant and/or credit top-up (balance in KV credits:<email>).
+// Apply a paid plan: premium grant and/or credit top-up. Credits live in D1
+// (atomic ledger). If D1 isn't bound yet, the top-up is recorded to KV as a
+// fallback queue so no purchase is lost before provisioning.
 async function applySquarePlan(env, email, plan, source) {
   const p = SQUARE_PLANS[plan] || {};
   const out = { plan };
   if (p.grant === "premium") out.grant = await grantPremium(env, email, source);
   if (p.credits) {
-    const cur = JSON.parse((await env.INVITES.get(`credits:${email}`)) || '{"balance":0}');
-    cur.balance = (cur.balance || 0) + p.credits;
-    cur.ts = Date.now();
-    cur.source = source;
-    await env.INVITES.put(`credits:${email}`, JSON.stringify(cur));
+    if (env.DB) {
+      const now = Date.now();
+      await env.DB.prepare(
+        `INSERT INTO credits (email, balance, lifetime, updated_ms) VALUES (?1, ?2, ?2, ?3)
+         ON CONFLICT(email) DO UPDATE SET balance = balance + ?2, lifetime = lifetime + ?2, updated_ms = ?3`,
+      ).bind(email, p.credits, now).run();
+      const row = await env.DB.prepare(`SELECT balance FROM credits WHERE email = ?1`).bind(email).first();
+      out.balance = row ? row.balance : p.credits;
+    } else {
+      const cur = JSON.parse((await env.INVITES.get(`credits_queue:${email}`)) || '{"pending":0}');
+      cur.pending = (cur.pending || 0) + p.credits;
+      await env.INVITES.put(`credits_queue:${email}`, JSON.stringify(cur));
+      out.queued = cur.pending; // apply to D1 once provisioned
+    }
     out.credits_added = p.credits;
-    out.balance = cur.balance;
   }
   return out;
 }
@@ -299,24 +309,37 @@ export default {
     }
 
     // ── Credits: consume (admin; called per-message by the OWUI rate-limit filter) ──
-    // NOTE: CF KV read-modify-write is not atomic; concurrent messages for one user
-    // could race (minor double-spend). Acceptable at low per-user concurrency; move to
-    // Durable Objects / D1 if strict accounting is ever required.
+    // D1 makes this ATOMIC: `UPDATE ... WHERE balance >= n` deducts fully or not at
+    // all, so concurrent messages can't double-spend.
     if (request.method === "POST" && pathname === "/api/credits/consume") {
       if (!env.ADMIN_SECRET || request.headers.get("X-Admin-Secret") !== env.ADMIN_SECRET) {
         return j({ ok: false, error: "unauthorized" }, 401);
       }
+      if (!env.DB) return j({ ok: false, error: "credits_not_provisioned" }, 503);
       const { email, amount } = await request.json().catch(() => ({}));
       if (!validEmail(email)) return j({ ok: false, error: "invalid_email" }, 400);
       const n = Math.max(1, Math.floor(Number(amount) || 1));
-      const key = `credits:${email.toLowerCase()}`;
-      const cur = JSON.parse((await env.INVITES.get(key)) || '{"balance":0}');
-      const bal = cur.balance || 0;
-      if (bal < n) return j({ ok: false, error: "insufficient", balance: bal }, 402);
-      cur.balance = bal - n;
-      cur.ts = Date.now();
-      await env.INVITES.put(key, JSON.stringify(cur));
-      return j({ ok: true, balance: cur.balance, consumed: n });
+      const em = email.toLowerCase();
+      const upd = await env.DB.prepare(
+        `UPDATE credits SET balance = balance - ?2, updated_ms = ?3 WHERE email = ?1 AND balance >= ?2`,
+      ).bind(em, n, Date.now()).run();
+      const row = await env.DB.prepare(`SELECT balance FROM credits WHERE email = ?1`).bind(em).first();
+      const bal = row ? row.balance : 0;
+      if (!upd.meta || upd.meta.changes === 0) return j({ ok: false, error: "insufficient", balance: bal }, 402);
+      return j({ ok: true, balance: bal, consumed: n });
+    }
+
+    // ── Tier lookup (admin): premium | credits | free ────────────────────────
+    if (request.method === "GET" && pathname.startsWith("/api/tier/")) {
+      if (!env.ADMIN_SECRET || request.headers.get("X-Admin-Secret") !== env.ADMIN_SECRET) {
+        return j({ ok: false, error: "unauthorized" }, 401);
+      }
+      const email = decodeURIComponent(pathname.slice("/api/tier/".length)).toLowerCase();
+      if (!validEmail(email)) return j({ ok: false, error: "invalid_email" }, 400);
+      const prem = await env.INVITES.get(`premium:${email}`);
+      const row = env.DB ? await env.DB.prepare(`SELECT balance FROM credits WHERE email = ?1`).bind(email).first() : null;
+      const bal = row ? row.balance : 0;
+      return j({ ok: true, email, tier: prem ? "premium" : (bal > 0 ? "credits" : "free"), credits: bal });
     }
 
     // ── Credits: balance lookup (admin) ──────────────────────────────────────
@@ -324,10 +347,10 @@ export default {
       if (!env.ADMIN_SECRET || request.headers.get("X-Admin-Secret") !== env.ADMIN_SECRET) {
         return j({ ok: false, error: "unauthorized" }, 401);
       }
-      const email = decodeURIComponent(pathname.slice("/api/credits/".length));
+      const email = decodeURIComponent(pathname.slice("/api/credits/".length)).toLowerCase();
       if (!validEmail(email)) return j({ ok: false, error: "invalid_email" }, 400);
-      const cur = JSON.parse((await env.INVITES.get(`credits:${email.toLowerCase()}`)) || '{"balance":0}');
-      return j({ ok: true, email, balance: cur.balance || 0 });
+      const row = env.DB ? await env.DB.prepare(`SELECT balance, lifetime FROM credits WHERE email = ?1`).bind(email).first() : null;
+      return j({ ok: true, email, balance: row ? row.balance : 0, lifetime: row ? row.lifetime : 0 });
     }
 
     // ── Premium list (admin only) → pod allowlist sync bridge ────────────────

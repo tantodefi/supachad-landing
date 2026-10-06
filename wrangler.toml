@@ -39,6 +39,16 @@ SQUARE_CURRENCY = "CAD"
 binding = "INVITES"
 id = "REPLACE_WITH_KV_NAMESPACE_ID"
 
+# D1 (SQLite) for the credits ledger — atomic decrements (KV can't do that).
+# Create once:  wrangler d1 create supachad
+#               wrangler d1 migrations apply supachad --remote
+# then paste the printed database_id below.
+[[d1_databases]]
+binding = "DB"
+database_name = "supachad"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
 # Secrets (set via `wrangler secret put <NAME>`, never in this file):
 #   ADMIN_SECRET      — required header X-Admin-Secret to mint invites + read /api/premium/list
 #   STRIPE_WEBHOOK_SECRET — whsec_… from the Stripe webhook endpoint (paywall)
