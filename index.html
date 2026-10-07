@@ -609,48 +609,32 @@
     <p class="lede">A live(-ish) feed of what landed on <span class="mono">chad-dev</span>. The full sequence is in <a href="https://docs.supachad.com/changelog">the changelog</a>.</p>
     <div class="ships">
       <div class="ship">
+        <div class="when">2026-10-06</div>
+        <div class="what"><b>Chad is now a hosted app — free tier, credits &amp; premium</b><span>Sign up at supachad.com and launch at chad.supachad.com. A free tier (50 messages a day, no card), pay-as-you-go credits via Square hosted checkout, or premium for the full agent. New signup + onboarding flow, an atomic credit ledger on Cloudflare D1, and per-message metering with a live "credits remaining" readout in chat — when the free allowance runs out you're prompted to top up or upgrade.</span></div>
+      </div>
+      <div class="ship">
+        <div class="when">2026-10-04</div>
+        <div class="what"><b>Caught up with upstream NemoClaw (4,928 commits) + renamed to supachad</b><span>Merged ~5 months of NVIDIA/NemoClaw — 4,928 commits — resolving 29 conflicts while preserving Chad's network policies, gbrain/gstack plugins, and live version pins. The fork is now <span class="mono">tantodefi/supachad</span>. Added a lean, fork-friendly CI gate (typecheck + config validation on every push) and a weekly, PR-gated upstream-sync so the fork stays current automatically.</span></div>
+      </div>
+      <div class="ship">
+        <div class="when">2026-10-01</div>
+        <div class="what"><b>In-browser terminal, OpenWebUI v0.11.4, free-tier limit, gbrain embed rescue</b><span>A real WebVM + Docker terminal inside OpenWebUI, with an agent bridge so Chad can type commands you watch live. chad-webui wired to the OpenWebUI 0.11.4 API (calendar, notes, automations, memories). A per-user free-tier daily message cap. And a gbrain rescue — migrated embeddings off an EOL model to nemotron-3-embed-1b after the old endpoint 410'd, restoring semantic search.</span></div>
+      </div>
+      <div class="ship">
+        <div class="when">2026-07-07</div>
+        <div class="what"><b>chad-ops dispatcher + mobile runs IDE + allowlist hardening</b><span>chad-ops.sh codifies the recurring pod operations — doctor (read-only health), recover (idempotent cold-start), deploy, gate-sync — so a half-finished recovery finishes by just re-running. The runs IDE got a responsive mobile layout with a hamburger nav, and the Chad-lite operator allowlist gate is now fail-closed and hardened.</span></div>
+      </div>
+      <div class="ship">
         <div class="when">2026-07-06</div>
-        <div class="what"><b>landing-lab, opencode coding pipeline, Moshi phone push</b><span>landing-lab: a grounded marketing-copy lab — nemotron distills the real docs into a fact sheet (claim → source), opencode big-pickle writes distinct landing pages per angle using only those facts, and nemotron compares them and flags any unbacked claim (first run: dev-depth 93 vs founder-outcomes 78, 5 claims flagged). coding-task v2: nemotron drives a long validated opencode build (plan → code → validate → assess loop) → Moshi ping → approval gate → optional draft PR; coder path spawn (isolated pod, default) or direct (host opencode). Root-caused opencode's "wrote 0 files" — it only uses tools when launched under a shell with stdout→file, now fixed + running --pure. Moshi phone push wired via device-token webhook (works from nemotron/cron, no Pro); approve/deny buttons need a routable tmux session (chad-claude); stale-hook self-heal added.</span></div>
-        <div class="when">2026-07-03</div>
-        <div class="what"><b>Composite audit: two more workflows, concurrency caps, tested helpers</b><span>Audited the 13 pre-composite workflows against the 0.26 composites — they were already well-hardened (fallback + tier-aware timeouts + continueOnFail + deterministic-first routing), and composites would have flattened the richest ones (fusion's 3-stage judge→synthesize, experiments' persistent Pareto population). Follow-ups: fusion/token-optimize fan-outs now cap in-flight model calls with Parallel maxConcurrency (and fixed a latent node-id collision); two new workflows — pr-shepherd (deterministic per-PR triage via lib/pr.js, no LLM for routing) and coverage-loop (built-in Loop, measure→fix→re-measure to a target); clarified that coerceJson is for raw subprocess stdout, not model-task output. New pure helpers lib/pr.js + lib/coverage.js are unit-tested (lib suite: 51 tests, 0 fail); all 20 workflows graph-validate.</span></div>
-        <div class="when">2026-07-02</div>
-        <div class="what"><b>Smithers 0.26 upgrade + composite-based workflows</b><span>Bumped smithers-orchestrator 0.23 → 0.26.1 (clean — all workflows graph-validate, tests green, no API breakage). Adopted Smithers' built-in composite components in five new workflows instead of hand-rolling loops: code-review-loop (ReviewLoop — produce→review→refine until approved), dependency-update (ScanFixVerify — triage npm outdated → propose bumps → verify), debate (Debate — two models argue for/against, a judge rules; the argue-to-consensus counterpart to fusion's parallel-synthesize), canary-judge (Poller — poll a health endpoint until stable → promote/hold/rollback), and changelog (plain Sequence). All shadow-safe and Approval-gated. chad-runs also gained chain-fork: copy and re-run a whole workflow chain, source untouched.</span></div>
-        <div class="when">2026-06-24</div>
-        <div class="what"><b>Self-improvement loop: directives, trace-grounded breeding, workflow chaining</b><span>The Runs IDE grew from four tabs to seven. A new Directives tab gives the operator a steering wheel (state/directives.json) that feeds both the evolutionary arena's breeding and every agent's system prompt. Breeding is now trace-grounded — lib/signal.js scans every run DB for failed/stale/low-quality runs and lib/fixtures.js harvests real run inputs as the eval set, so mutations target concrete failure modes (the GEPA pattern). New Chains tab strings workflows into resumable pipelines; new Schedules tab shows the launchd timers. Three nightly self-improvement workflows landed: token-optimize (tokenmaxxing → cheaper-model downgrades with a model×task matrix + efficiency view), bug-report (Chad files his own bugs), and skill-improve (Chad proposes his own enhancements) — all Approval-gated. The chad-runs CLI now mirrors every endpoint 1:1, so Chad drives all of it headlessly.</span></div>
+        <div class="what"><b>landing-lab, opencode coding pipeline, Moshi phone push</b><span>A grounded marketing-copy lab: nemotron distills the real docs into a claim→source fact sheet, opencode writes landing variations using only those facts, and nemotron flags any unbacked claim. A validated opencode build loop (plan → code → validate → assess) with an approval gate and optional draft PR. Moshi phone push via a device-token webhook — works from cron, no Pro.</span></div>
+      </div>
+      <div class="ship">
         <div class="when">2026-06-16</div>
-        <div class="what"><b>Runs IDE for Smithers workflows + model fusion</b><span>A web IDE at runs.supachad.com (serve-runs.js, Hono over the Smithers SQLite DBs): run history, live task tree, a CodeMirror .jsx editor, the experiment leaderboard, and browser launch/cancel/approve/fork — fail-closed behind Cloudflare Access. Chad drives the same API headlessly via the chad-runs CLI. New fusion.jsx runs a prompt across N models in parallel then fuses them (best-of-breed), with the roster auto-refreshed daily from NVIDIA's /v1/models. Settled the orchestrator question: keep both chad-spawn (one-shot, GHA-isolated) and chad-Smithers (durable workflows), bridged so a workflow can offload a heavy step to a GH runner.</span></div>
+        <div class="what"><b>Runs IDE for Smithers workflows + model fusion</b><span>A web IDE over the Smithers run DBs: run history, a live task tree, a .jsx editor, the experiment leaderboard, and browser launch/cancel/approve/fork — fail-closed behind Cloudflare Access. New fusion runs a prompt across N models in parallel then fuses the best, with the roster auto-refreshed daily from NVIDIA's model list.</span></div>
+      </div>
+      <div class="ship">
         <div class="when">2026-06-13</div>
-        <div class="what"><b>Nemotron 3 Ultra 550B + evolutionary experiments</b><span>Default hosted model upgraded to NVIDIA's newest open model (nemotron-3-ultra-550b-a55b); the reasoning+tool-call harness bug that pinned Super is absent in Ultra, so reasoning is on by default. New host-side Smithers runner (scripts/chad-smithers) runs an evolutionary experiment loop — start wide, score candidates in parallel, keep only what works — crash-resumable, posting the leaderboard to OpenWebUI nightly, in shadow beside chad-experiment-cron. Moshi hooks wired for phone notifications + approval; chad-tmux for phone-attachable host sessions.</span></div>
-        <div class="when">2026-05-13</div>
-        <div class="what"><b>Memory pipeline + gateway watchdog</b><span>chad-gbrain-prune weekly retention (gbrain memory/events &gt;365d, workspace digests &gt;30d, dry-run default). chad-webui-ingest daily bridges openwebui.db chats into sandbox gbrain. Dream digest surfaces Embedded/Chunks ratio + writes feedback when stale. Host launchd watchdog auto-restarts a dead gateway with 4GB heap headroom.</span></div>
-      </div>
-      <div class="ship">
-        <div class="when">2026-05-12</div>
-        <div class="what"><b>OpenWebUI auto-curated dropdown + tunnel fix</b><span>nvidia-proxy filters /v1/models to per-provider top picks via nvidia-liveness daily sweep. Disable confirmed-dead (HTTP 410 EOL) instantly; soft-disable seeded curated rows whose base model is dead. cloudflared switched to --protocol http2 — eliminates the QUIC UDP teardowns that surfaced as transient "Argo tunnel" 530s. WEBUI_SECRET_KEY pinned so container recreates don't invalidate every browser JWT.</span></div>
-      </div>
-      <div class="ship">
-        <div class="when">2026-05-11</div>
-        <div class="what"><b>Sandbox survival hardening</b><span>Bonjour mDNS plugin disabled (was crash-looping the gateway). LLM idle timeout raised to 180s for cold-start large models. feedback-proposals.md path consolidated. proton-calendar SKILL.md rewritten with cron-boundary decision table + EMAIL-POLICY link. New chad-readme § 11.5 documents the source-vs-deployed wrapper gap and the kubectl-cp recovery procedure.</span></div>
-      </div>
-      <div class="ship">
-        <div class="when">2026-05-07</div>
-        <div class="what"><b>Cron context optimization</b><span>--light-context applied to every cron — 70-82% input-token reduction on wrapper-only fires. idleTimeoutSeconds=60 bounds hung Nemotron sessions. memory-curator / spawn-poll / spawn-gc registered.</span></div>
-      </div>
-      <div class="ship">
-        <div class="when">2026-05-06</div>
-        <div class="what"><b>Async GHA spawns</b><span>chad-spawn --async, chad-spawn-poll reconciler, chad-spawn-gc retention, opencode kind, --binary-override flag</span></div>
-      </div>
-      <div class="ship">
-        <div class="when">2026-05-06</div>
-        <div class="what"><b>NVIDIA fallback in agent-job runner</b><span>codex/opencode auto-route to integrate.api.nvidia.com when OPENAI_API_KEY absent; claude stays Anthropic-only</span></div>
-      </div>
-      <div class="ship">
-        <div class="when">2026-05-06</div>
-        <div class="what"><b>GHA substrate for chad-spawn</b><span>--substrate gha flag · agent-job.yml workflow template · chad-state-bootstrap installer · branch-as-job-record</span></div>
-      </div>
-      <div class="ship">
-        <div class="when">2026-05-06</div>
-        <div class="what"><b>Hermes-style memory curator</b><span>chad-memory-curator + chad-memory-snapshot · weekly draft-only consolidation pass · inactivity-gated · pre-mutation snapshots</span></div>
+        <div class="what"><b>Nemotron 3 Ultra 550B + evolutionary experiments</b><span>A host-side Smithers runner (chad-smithers) runs an evolutionary experiment loop — start wide, score candidates in parallel, keep only what works — crash-resumable, posting a nightly leaderboard to OpenWebUI. Moshi hooks for phone notifications + approval; chad-tmux for phone-attachable host sessions.</span></div>
       </div>
     </div>
   </div>
