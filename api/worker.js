@@ -14,13 +14,16 @@
 //   GET  /invite/<token>                        → redeem: one-time; grants access
 //   POST /api/stripe/webhook                    → paid checkout → premium (sig-verified)
 //   POST /api/square/checkout  {email, plan}    → returns a Square hosted-checkout URL
-//   POST /api/square/webhook                    → paid → premium/credits once; refund reverses (sig-verified)
+//   POST /api/square/webhook                    → credits once per payment; refund reverses;
+//                                                 subscription/invoice events → premium until paid-through date
 //   GET  /api/premium/list                      → admin-only; emails for pod allowlist sync
 //
 // Square bindings (wrangler.toml vars + secrets):
 //   var    SQUARE_ENV              "sandbox" (default) | "production"
 //   var    SQUARE_LOCATION_ID      e.g. L87VN9AXAYKQG (sandbox default test account)
 //   var    SQUARE_CURRENCY         default "CAD"
+//   var    SQUARE_SUBSCRIPTION_PLAN_ID  premium monthly plan variation id
+//   var    SQUARE_SUBSCRIPTION_AMOUNT   its price in cents (default 1500)
 //   secret SQUARE_ACCESS_TOKEN     sandbox/prod access token (EAAA…)
 //   secret SQUARE_WEBHOOK_SIGNATURE_KEY  from the dashboard webhook subscription
 //   var    SQUARE_WEBHOOK_URL      exact subscribed URL (defaults to this route's origin)
@@ -104,7 +107,9 @@ async function addToCloudflareAccess(env, email) {
 // Plans map a checkout to an outcome: a premium grant and/or a credit top-up.
 // Amounts are in the smallest currency unit (cents). Adjust freely.
 const SQUARE_PLANS = {
-  premium:       { name: "Chad Premium",            amount: 500,  grant: "premium" },
+  // Monthly subscription (Square catalog plan SQUARE_SUBSCRIPTION_PLAN_ID). The
+  // grant comes from subscription/invoice webhooks, not from the payment itself.
+  premium:       { name: "Chad Premium — monthly",  subscription: true },
   credits_1k:    { name: "Chad Credits — 1,000",    amount: 500,  credits: 1000 },
   credits_5k:    { name: "Chad Credits — 5,000",    amount: 2000, credits: 5000 },
 };
@@ -115,17 +120,25 @@ function squareBase(env) {
     : "https://connect.squareupsandbox.com";
 }
 
+function planAmount(env, p) {
+  return p.subscription ? Number(env.SQUARE_SUBSCRIPTION_AMOUNT || 1500) : p.amount;
+}
+
 async function squareCreatePaymentLink(env, plan, email, origin) {
   const p = SQUARE_PLANS[plan];
   if (!p) return { error: "unknown_plan" };
+  if (p.subscription && !env.SQUARE_SUBSCRIPTION_PLAN_ID) return { error: "subscription_not_configured" };
   const body = {
     idempotency_key: crypto.randomUUID(),
     quick_pay: {
       name: p.name,
-      price_money: { amount: p.amount, currency: env.SQUARE_CURRENCY || "CAD" },
+      price_money: { amount: planAmount(env, p), currency: env.SQUARE_CURRENCY || "CAD" },
       location_id: env.SQUARE_LOCATION_ID,
     },
-    checkout_options: { redirect_url: `${origin}/?paid=1` },
+    checkout_options: {
+      redirect_url: `${origin}/?paid=1`,
+      ...(p.subscription ? { subscription_plan_id: env.SQUARE_SUBSCRIPTION_PLAN_ID } : {}),
+    },
     pre_populated_data: { buyer_email: email },
   };
   const r = await fetch(`${squareBase(env)}/v2/online-checkout/payment-links`, {
@@ -205,6 +218,9 @@ async function handleSquarePayment(env, pay, type) {
   const p = SQUARE_PLANS[o.plan];
   const email = String(o.email || "").toLowerCase();
   if (!p || !validEmail(email)) return { ok: true, note: "bad_order_mapping" };
+  // The first subscription charge also arrives here; premium is granted by the
+  // subscription events, which carry the paid-through date.
+  if (p.subscription) return { ok: true, note: "subscription_payment", email };
   const paid = Number(pay.amount_money?.amount || 0);
   if (paid < p.amount) return { ok: true, note: "underpaid", paid, expected: p.amount };
   if (!env.DB) return { ok: false, error: "credits_not_provisioned" };
@@ -233,6 +249,59 @@ async function handleSquareRefund(env, ref) {
   }
   if (SQUARE_PLANS[row.plan]?.grant === "premium") await env.INVITES.delete(`premium:${row.email}`);
   return { ok: true, refunded: row.payment_id, email: row.email, plan: row.plan };
+}
+
+// ── Subscriptions ────────────────────────────────────────────────────────────
+// Premium from a subscription lasts until Square's charged_through_date, plus a
+// grace period while active (renewal events can lag the period end). A cancelled
+// subscription stays ACTIVE until its canceled_date: honour that, no grace.
+// A record with no `until` is a lifetime grant (admin invite) and is never
+// shortened or removed by subscription events.
+const SUB_GRACE_MS = 3 * 86400 * 1000;
+
+function endOfDayMs(d) {
+  return d ? Date.parse(`${d}T23:59:59Z`) : 0;
+}
+
+function premiumActive(rec, now = Date.now()) {
+  return !!rec && (!rec.until || rec.until > now);
+}
+
+async function squareGet(env, path) {
+  const r = await fetch(`${squareBase(env)}${path}`, {
+    headers: { Authorization: `Bearer ${env.SQUARE_ACCESS_TOKEN}`, "Square-Version": "2025-01-23" },
+  });
+  return r.ok ? r.json() : null;
+}
+
+function subscriptionUntil(sub) {
+  if (sub.status === "ACTIVE" && sub.canceled_date) return endOfDayMs(sub.canceled_date);
+  if (sub.status === "ACTIVE") return endOfDayMs(sub.charged_through_date) + SUB_GRACE_MS;
+  return endOfDayMs(sub.charged_through_date); // PAUSED / DEACTIVATED / CANCELED
+}
+
+// Re-read the subscription from Square (events can arrive out of order, so the
+// payload is only a pointer) and set the subscriber's premium window from it.
+async function handleSquareSubscription(env, subId, now = Date.now()) {
+  if (!subId) return { ok: true, note: "no_subscription" };
+  const sub = (await squareGet(env, `/v2/subscriptions/${encodeURIComponent(subId)}`))?.subscription;
+  if (!sub) return { ok: false, error: "subscription_fetch_failed" }; // non-200 → Square retries
+  if (sub.plan_variation_id !== env.SQUARE_SUBSCRIPTION_PLAN_ID) return { ok: true, note: "other_plan" };
+  const cust = sub.customer_id ? (await squareGet(env, `/v2/customers/${sub.customer_id}`))?.customer : null;
+  const email = String(cust?.email_address || "").toLowerCase();
+  if (!validEmail(email)) return { ok: true, note: "no_customer_email", subscription: sub.id };
+  const key = `premium:${email}`;
+  const cur = JSON.parse((await env.INVITES.get(key)) || "null");
+  if (cur && !cur.until) return { ok: true, email, lifetime: true };
+  const until = subscriptionUntil(sub);
+  if (until > now) {
+    await env.INVITES.put(key, JSON.stringify({ ts: now, source: "square:subscription", sub: sub.id, until }), {
+      metadata: { until },
+    });
+    return { ok: true, email, status: sub.status, until: new Date(until).toISOString() };
+  }
+  if (cur) await env.INVITES.delete(key);
+  return { ok: true, email, status: sub.status, expired: true };
 }
 
 function esc(s) {
@@ -341,6 +410,16 @@ export default {
         if (pay.status !== "COMPLETED") return j({ ok: true, ignored: `${type}:${pay.status}` });
         return j(await handleSquarePayment(env, pay, type));
       }
+      if (type === "subscription.created" || type === "subscription.updated") {
+        const r = await handleSquareSubscription(env, evt.data?.object?.subscription?.id);
+        return j(r, r.ok ? 200 : 502);
+      }
+      if (type === "invoice.payment_made" || type === "invoice.updated") {
+        const subId = evt.data?.object?.invoice?.subscription_id;
+        if (!subId) return j({ ok: true, ignored: `${type}:no_subscription` });
+        const r = await handleSquareSubscription(env, subId);
+        return j(r, r.ok ? 200 : 502);
+      }
       if (type === "refund.created" || type === "refund.updated") {
         const ref = evt.data?.object?.refund || {};
         if (ref.status !== "COMPLETED") return j({ ok: true, ignored: `${type}:${ref.status}` });
@@ -377,7 +456,7 @@ export default {
       }
       const email = decodeURIComponent(pathname.slice("/api/tier/".length)).toLowerCase();
       if (!validEmail(email)) return j({ ok: false, error: "invalid_email" }, 400);
-      const prem = await env.INVITES.get(`premium:${email}`);
+      const prem = premiumActive(JSON.parse((await env.INVITES.get(`premium:${email}`)) || "null"));
       const row = env.DB ? await env.DB.prepare(`SELECT balance FROM credits WHERE email = ?1`).bind(email).first() : null;
       const bal = row ? row.balance : 0;
       return j({ ok: true, email, tier: prem ? "premium" : (bal > 0 ? "credits" : "free"), credits: bal });
@@ -404,7 +483,8 @@ export default {
       let cursor;
       do {
         const page = await env.INVITES.list({ prefix: "premium:", cursor });
-        for (const k of page.keys) out.push(k.name.slice("premium:".length));
+        // Subscription grants carry `until` in metadata, so expiry needs no reads.
+        for (const k of page.keys) if (premiumActive(k.metadata || {})) out.push(k.name.slice("premium:".length));
         cursor = page.list_complete ? undefined : page.cursor;
       } while (cursor);
       return j({ ok: true, emails: out });
