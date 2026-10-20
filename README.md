@@ -15,15 +15,10 @@ open http://localhost:8000
 
 ## Deploy
 
-Cloudflare Pages — recommended:
-
-1. Cloudflare dashboard → Workers & Pages → Create → connect this repo.
-2. Build command: leave blank (no build step).
-3. Build output directory: `/` (the root).
-4. Environment variables: none.
-5. Custom domain: `supachad.com`.
-
-If you prefer Vercel: same idea — no build, root deploy, custom domain.
+The site is the Workers static-assets Worker `supachad-landing`, deployed by Cloudflare
+Workers Builds on every push to `main` (root `wrangler.toml`, no build step). Pull
+requests get a preview build. Only `index.html` and `assets/` are published: see
+`.assetsignore`, and add any new top-level site file there.
 
 ## Editing
 
@@ -51,4 +46,4 @@ linking to the upstream's official site.
 `supachad.com/api/*` and `/invite/*` are served by a separate Worker,
 `supachad-landing-api` (signup, invites, Square checkout/webhooks, credits). Deploy it from
 `api/` with `npx wrangler deploy`; secrets are set with `wrangler secret put`. See
-`api/INVITE-SETUP.md`. The static site above is unaffected (Pages, repo root).
+`api/INVITE-SETUP.md`. Its routes take precedence over the site Worker on those paths.
