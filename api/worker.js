@@ -14,7 +14,7 @@
 //   GET  /invite/<token>                        → redeem: one-time; grants access
 //   POST /api/stripe/webhook                    → paid checkout → premium (sig-verified)
 //   POST /api/square/checkout  {email, plan}    → returns a Square hosted-checkout URL
-//   POST /api/square/webhook                    → paid → premium/credits (sig-verified)
+//   POST /api/square/webhook                    → paid → premium/credits once; refund reverses (sig-verified)
 //   GET  /api/premium/list                      → admin-only; emails for pod allowlist sync
 //
 // Square bindings (wrangler.toml vars + secrets):
@@ -191,6 +191,54 @@ async function applySquarePlan(env, email, plan, source) {
   return out;
 }
 
+// A COMPLETED payment → apply its plan exactly once. Only payments made through
+// our own checkout links (an `sqorder:` mapping) count: any other sale at the
+// same Square location must never grant premium. Every outcome returns 200 so
+// Square stops retrying; a missing mapping is kept in KV for a manual look.
+async function handleSquarePayment(env, pay, type) {
+  const m = pay.order_id ? await env.INVITES.get(`sqorder:${pay.order_id}`) : null;
+  if (!m) {
+    await env.INVITES.put(`sqorphan:${pay.id}`, JSON.stringify({ order_id: pay.order_id, ts: Date.now() }), { expirationTtl: 30 * 86400 });
+    return { ok: true, note: "not_our_checkout" };
+  }
+  const o = JSON.parse(m);
+  const p = SQUARE_PLANS[o.plan];
+  const email = String(o.email || "").toLowerCase();
+  if (!p || !validEmail(email)) return { ok: true, note: "bad_order_mapping" };
+  const paid = Number(pay.amount_money?.amount || 0);
+  if (paid < p.amount) return { ok: true, note: "underpaid", paid, expected: p.amount };
+  if (!env.DB) return { ok: false, error: "credits_not_provisioned" };
+  const ins = await env.DB.prepare(
+    `INSERT OR IGNORE INTO square_payments (payment_id, order_id, email, plan, credits, amount, created_ms)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+  ).bind(pay.id, pay.order_id, email, o.plan, p.credits || 0, paid, Date.now()).run();
+  if (!ins.meta || ins.meta.changes === 0) return { ok: true, duplicate: true, email };
+  return { ok: true, email, ...(await applySquarePlan(env, email, o.plan, `square:${type}`)) };
+}
+
+// A COMPLETED refund → reverse the payment's grant once. Credits already spent
+// can't be clawed back past zero; a premium refund removes premium.
+async function handleSquareRefund(env, ref) {
+  if (!env.DB || !ref.payment_id) return { ok: true, note: "no_payment" };
+  const row = await env.DB.prepare(`SELECT * FROM square_payments WHERE payment_id = ?1`).bind(ref.payment_id).first();
+  if (!row) return { ok: true, note: "unknown_payment" };
+  const upd = await env.DB.prepare(
+    `UPDATE square_payments SET status = 'refunded', refunded_ms = ?2 WHERE payment_id = ?1 AND status = 'paid'`,
+  ).bind(ref.payment_id, Date.now()).run();
+  if (!upd.meta || upd.meta.changes === 0) return { ok: true, duplicate: true };
+  if (row.credits > 0) {
+    await env.DB.prepare(
+      `UPDATE credits SET balance = MAX(0, balance - ?2), updated_ms = ?3 WHERE email = ?1`,
+    ).bind(row.email, row.credits, Date.now()).run();
+  }
+  if (SQUARE_PLANS[row.plan]?.grant === "premium") await env.INVITES.delete(`premium:${row.email}`);
+  return { ok: true, refunded: row.payment_id, email: row.email, plan: row.plan };
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -290,20 +338,13 @@ export default {
       const type = evt.type || "";
       if (type === "payment.created" || type === "payment.updated") {
         const pay = evt.data?.object?.payment || {};
-        if (pay.status === "COMPLETED") {
-          const orderId = pay.order_id;
-          let email = pay.buyer_email_address;
-          let plan = "premium";
-          if (orderId) {
-            const m = await env.INVITES.get(`sqorder:${orderId}`);
-            if (m) { const o = JSON.parse(m); email = o.email || email; plan = o.plan || plan; }
-          }
-          if (validEmail(email)) {
-            const applied = await applySquarePlan(env, email.toLowerCase(), plan, `square:${type}`);
-            return j({ ok: true, email, ...applied });
-          }
-          return j({ ok: true, note: "no email resolved" }); // 200 so Square stops retrying
-        }
+        if (pay.status !== "COMPLETED") return j({ ok: true, ignored: `${type}:${pay.status}` });
+        return j(await handleSquarePayment(env, pay, type));
+      }
+      if (type === "refund.created" || type === "refund.updated") {
+        const ref = evt.data?.object?.refund || {};
+        if (ref.status !== "COMPLETED") return j({ ok: true, ignored: `${type}:${ref.status}` });
+        return j(await handleSquareRefund(env, ref));
       }
       return j({ ok: true, ignored: type });
     }
@@ -380,5 +421,5 @@ function redeemPage(message) {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Chad invite</title><style>body{font:16px/1.6 ui-sans-serif,system-ui;max-width:32rem;margin:12vh auto;padding:0 1.5rem;color:#e4e4e7;background:#0b0b0d}
 .card{background:#18181b;border:1px solid #27272a;border-radius:14px;padding:1.75rem}a{color:#818cf8}</style></head>
-<body><div class="card"><h1>Chad</h1><p>${message}</p><p><a href="https://chad.supachad.com">Open Chad →</a></p></div></body></html>`;
+<body><div class="card"><h1>Chad</h1><p>${esc(message)}</p><p><a href="https://chad.supachad.com">Open Chad →</a></p></div></body></html>`;
 }
