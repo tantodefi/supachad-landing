@@ -45,3 +45,10 @@ The visual identity (mark, palette, copy) is original. Upstream
 dependency wordmarks in the "Built on" section are nominative
 references — no brand assets are reproduced; each card is plain text
 linking to the upstream's official site.
+
+## API Worker (`api/`)
+
+`supachad.com/api/*` and `/invite/*` are served by a separate Worker,
+`supachad-landing-api` (signup, invites, Square checkout/webhooks, credits). Deploy it from
+`api/` with `npx wrangler deploy`; secrets are set with `wrangler secret put`. See
+`api/INVITE-SETUP.md`. The static site above is unaffected (Pages, repo root).
