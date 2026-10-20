@@ -1,0 +1,6 @@
+# Workers static assets: publish only the site. Without this, wrangler.toml's
+# assets.directory "." served every repo file (README.md, wrangler.toml, api/).
+*
+!index.html
+!assets/
+!assets/**
