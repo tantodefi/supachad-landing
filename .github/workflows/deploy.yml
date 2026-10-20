@@ -38,6 +38,15 @@ jobs:
 
       # No build step — site is pure static (index.html + assets/)
 
+      # Publish only the site. Deploying `.` served every repo file at
+      # supachad.com (README.md, wrangler.toml, this workflow, and api/ once the
+      # Worker source lands on main).
+      - name: Stage site files
+        run: |
+          mkdir -p _site
+          cp index.html _site/
+          cp -R assets _site/
+
       - name: Deploy to Cloudflare Pages
         id: deploy
         if: env.CF_API_TOKEN != ''
@@ -45,7 +54,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy . --project-name=supachad-landing --branch=${{ github.head_ref || github.ref_name }}
+          command: pages deploy _site --project-name=supachad-landing --branch=${{ github.head_ref || github.ref_name }}
 
       - name: Comment preview URL on PR
         if: github.event_name == 'pull_request' && steps.deploy.outputs.deployment-url != ''
