@@ -32,6 +32,11 @@ CF_ACCESS_READY = "0"
 SQUARE_ENV = "sandbox"                 # flip to "production" when going live
 SQUARE_LOCATION_ID = "L87VN9AXAYKQG"   # sandbox "Default Test Account" (CAD); replace for prod
 SQUARE_CURRENCY = "CAD"
+# Premium = monthly subscription. Plan VARIATION id from
+# `api/scripts/square-subscription-plan.sh sandbox|production` (one per env);
+# the amount must match the plan's price (cents).
+SQUARE_SUBSCRIPTION_PLAN_ID = "25EPK6ORPU6AM5HYD7WTQH2C"   # sandbox; replace for prod
+SQUARE_SUBSCRIPTION_AMOUNT = "1500"
 # SQUARE_WEBHOOK_URL defaults to this route's origin; set it if the subscribed
 # dashboard URL differs (it must match EXACTLY for signature verification).
 
