@@ -49,6 +49,32 @@ real `chad` access:
    launchctl load ~/Library/LaunchAgents/dev.nemoclaw.chad-premium-sync.plist
    ```
 
+## Signup approval (email + phone)
+
+`POST /api/signup` stores `signup:<email>` as `pending`, emails the user a confirmation and
+the operator (`OPERATOR_EMAIL`) an alert with a signed review link (approve/deny page; GET
+only shows it, so mail scanners can't approve). The host watcher
+`nemoclaw/scripts/openwebui/chad-signup-watch.sh` (launchd `dev.nemoclaw.chad-signup-watch`,
+every 2 min) claims new signups and sends a Moshi yes/no card; yes → `/api/signups/decide`
+approve → invite minted and emailed. Paid users (subscription or credits) skip approval and
+get a welcome email. Unappliable Access grants queue in `accessq:<email>`; the 15-min cron
+applies them once `CF_ACCESS_READY=1` and emails "your access is live".
+
+One-time setup, all Cloudflare:
+
+1. **Email Service**: dashboard → Email Service → onboard `supachad.com` (adds SPF/DKIM).
+   Sending to arbitrary recipients needs Workers Paid; the operator address can be a verified
+   destination (free). Sender = `EMAIL_FROM` in wrangler.toml.
+2. `wrangler secret put OPERATOR_EMAIL`
+3. Optional **Turnstile**: create a widget for supachad.com, `wrangler secret put
+   TURNSTILE_SECRET`, and set `TURNSTILE_SITEKEY` in `index.html`.
+4. Install the watcher plist (see the file header) on the host.
+
+Admin API (`X-Admin-Secret`): `GET /api/signups?status=pending|notified|approved|denied|all`,
+`POST /api/signups/claim {max_age_hours}`, `POST /api/signups/decide {email, action:
+approve|deny|release, tier?}`. Set `SIGNUP_AUTO_APPROVE="1"` to skip review. Tests:
+`node --test api/test/`.
+
 ## Use
 - **Signup:** `POST /api/signup {email, note?}` (wire a form on index.html to this).
 - **Mint invite:** `POST /api/invite/mint {email, tier}` with `X-Admin-Secret`
