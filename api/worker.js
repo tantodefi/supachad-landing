@@ -130,7 +130,10 @@ async function applyAccessGrant(env, email) {
   if (!cur.success) return { applied: false, error: "policy_read_failed", detail: cur.errors };
   const include = cur.result.include || [];
   if (!include.some((r) => r.email && r.email.email === email)) include.push({ email: { email } });
-  const put = await (await fetch(base, { method: "PUT", headers: hdr, body: JSON.stringify({ ...cur.result, include }) })).json();
+  // Send back only the writable fields (id/uid/timestamps/reusable are read-only).
+  const { name, decision, exclude, require, precedence } = cur.result;
+  const body = { name, decision, include, exclude: exclude || [], require: require || [], ...(precedence != null ? { precedence } : {}) };
+  const put = await (await fetch(base, { method: "PUT", headers: hdr, body: JSON.stringify(body) })).json();
   return put.success ? { applied: true } : { applied: false, error: "policy_write_failed", detail: put.errors };
 }
 

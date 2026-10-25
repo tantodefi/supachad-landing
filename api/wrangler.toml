@@ -23,10 +23,10 @@ routes = [
 ]
 
 [vars]
-# Flip to "1" ONLY after the CF API token has `Access: Apps and Policies:Edit`.
+# "1": the CF_API_TOKEN secret has `Access: Apps and Policies:Edit` (set 2026-10-25).
 # Until then, invite redemption / Stripe checkout queue the grant instead of
 # calling the CF API (redemption still succeeds; the user is told they're queued).
-CF_ACCESS_READY = "0"
+CF_ACCESS_READY = "1"
 
 # ── Square (payments) ──────────────────────────────────────────────────────
 SQUARE_ENV = "sandbox"                 # flip to "production" when going live
