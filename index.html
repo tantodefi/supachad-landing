@@ -693,7 +693,7 @@
     <p class="lede">Three steps from here to a running agent.</p>
     <div class="steps">
       <div class="step"><div class="n"></div><h4>Create your account</h4><p>Drop your email below and pick a plan. Free needs no card.</p></div>
-      <div class="step"><div class="n"></div><h4>Get access</h4><p>We provision your login and email you an access link to the app.</p></div>
+      <div class="step"><div class="n"></div><h4>Get access</h4><p>Free accounts are reviewed by hand; once approved we email you a single-use access link. Paid plans are activated right after checkout.</p></div>
       <div class="step"><div class="n"></div><h4>Launch &amp; chat</h4><p>Open the app, start chatting. Free gives you 50 messages a day; buy credits or go premium for more.</p></div>
     </div>
     <div class="signup">
@@ -706,9 +706,10 @@
         <input type="email" id="su-email" placeholder="you@email.com" autocomplete="email" />
         <button class="btn btn-primary" id="su-btn" onclick="submitSignup()">Create account</button>
       </div>
+      <div id="su-turnstile" style="margin-top:12px"></div>
       <div class="msg" id="su-msg"></div>
       <div class="next" id="su-next">
-        <p style="margin:0 0 12px">You're set. Launch the app once your access link arrives:</p>
+        <p style="margin:0 0 12px">Check your inbox for a confirmation. Once your access link arrives, launch the app:</p>
         <a class="btn btn-primary" href="https://chad.supachad.com">Launch Chad ↗</a>
       </div>
     </div>
@@ -716,6 +717,19 @@
 </section>
 
 <script>
+  // Cloudflare Turnstile: set the site key to turn it on (the Worker enforces it
+  // once TURNSTILE_SECRET is set). Empty = no widget.
+  var TURNSTILE_SITEKEY = "";
+  var suTurnstile = "";
+  if (TURNSTILE_SITEKEY) {
+    window.onTurnstileLoad = function () {
+      turnstile.render("#su-turnstile", { sitekey: TURNSTILE_SITEKEY, callback: function (t) { suTurnstile = t; } });
+    };
+    var ts = document.createElement("script");
+    ts.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileLoad";
+    ts.async = true;
+    document.head.appendChild(ts);
+  }
   let suPlan = "free";
   function pickPlan(p) {
     suPlan = p;
@@ -737,9 +751,11 @@
     msg.textContent = "Working…";
     try {
       if (suPlan === "free") {
-        var r = await fetch("/api/signup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: email }) });
+        var r = await fetch("/api/signup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: email, turnstile: suTurnstile }) });
         var d = await r.json();
-        if (d.ok) { msg.className = "msg ok"; msg.textContent = "You're on the list — we'll email your access link shortly."; next.classList.add("show"); }
+        if (d.ok) { msg.className = "msg ok"; msg.textContent = d.message || "You're on the list — check your inbox."; next.classList.add("show"); }
+        else if (d.error === "rate_limited") { msg.className = "msg err"; msg.textContent = "Too many attempts — wait a minute and try again."; }
+        else if (d.error === "captcha_failed") { msg.className = "msg err"; msg.textContent = "Please complete the check above and try again."; if (window.turnstile) turnstile.reset("#su-turnstile"); }
         else { msg.className = "msg err"; msg.textContent = "Something went wrong. Try again."; }
       } else {
         var r2 = await fetch("/api/square/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: email, plan: suPlan }) });
