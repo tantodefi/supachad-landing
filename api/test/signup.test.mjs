@@ -156,12 +156,18 @@ test("cron drains the Access queue once ready and emails the user", async () => 
   Object.assign(env, { CF_ACCESS_READY: "1", CF_ACCOUNT_ID: "a", CF_ACCESS_APP_ID: "b", CF_ACCESS_POLICY_ID: "c", CF_API_TOKEN: "t" });
   globalThis.fetch = async (u, init) => {
     fetches.push({ u: String(u), init });
-    return new Response(JSON.stringify({ success: true, result: { name: "p", include: [] } }));
+    return new Response(JSON.stringify({
+      success: true,
+      result: { id: "c", uid: "c", created_at: "x", reusable: false, name: "p", decision: "allow", precedence: 1, include: [{ email: { email: "op@x.io" } }] },
+    }));
   };
   await worker.scheduled({}, env, ctx);
   await settle();
   assert.equal(await env.INVITES.get("accessq:q@x.io"), null);
-  const put = fetches.find((f) => f.init?.method === "PUT");
-  assert.deepEqual(JSON.parse(put.init.body).include, [{ email: { email: "q@x.io" } }]);
+  const put = JSON.parse(fetches.find((f) => f.init?.method === "PUT").init.body);
+  assert.deepEqual(put, {
+    name: "p", decision: "allow", precedence: 1, exclude: [], require: [],
+    include: [{ email: { email: "op@x.io" } }, { email: { email: "q@x.io" } }],
+  }, "existing rules kept, read-only fields dropped");
   assert.match(sent.at(-1).subject, /access is live/);
 });
