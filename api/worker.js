@@ -123,9 +123,33 @@ async function addToCloudflareAccess(env, email) {
   return { ...res, queued: true };
 }
 
+function accessPolicyApi(env) {
+  return {
+    base: `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/access/apps/${env.CF_ACCESS_APP_ID}/policies/${env.CF_ACCESS_POLICY_ID}`,
+    hdr: { Authorization: `Bearer ${env.CF_API_TOKEN}`, "content-type": "application/json" },
+  };
+}
+
+// Already a Chad user: the operator, a paid account, or anyone already on the
+// chad.supachad.com Access policy (operators + every approved/paid user). A
+// signup for one of these must not alert the operator or email the address —
+// on 2026-10-30 a scanner signed up with the admin's own address. Fails open
+// (treated as new) only if the policy can't be read.
+async function isExistingUser(env, email) {
+  if (env.OPERATOR_EMAIL && email === env.OPERATOR_EMAIL.trim().toLowerCase()) return true;
+  if ((await env.INVITES.get(`premium:${email}`)) || (await env.INVITES.get(`welcomed:${email}`))) return true;
+  if (env.CF_ACCESS_READY !== "1" || !env.CF_API_TOKEN) return false;
+  try {
+    const { base, hdr } = accessPolicyApi(env);
+    const cur = await (await fetch(base, { headers: hdr })).json();
+    return !!cur.success && (cur.result.include || []).some((r) => (r.email?.email || "").toLowerCase() === email);
+  } catch {
+    return false;
+  }
+}
+
 async function applyAccessGrant(env, email) {
-  const base = `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/access/apps/${env.CF_ACCESS_APP_ID}/policies/${env.CF_ACCESS_POLICY_ID}`;
-  const hdr = { Authorization: `Bearer ${env.CF_API_TOKEN}`, "content-type": "application/json" };
+  const { base, hdr } = accessPolicyApi(env);
   const cur = await (await fetch(base, { headers: hdr })).json();
   if (!cur.success) return { applied: false, error: "policy_read_failed", detail: cur.errors };
   const include = cur.result.include || [];
@@ -452,10 +476,10 @@ async function handleSignup(request, env, ctx, origin) {
   }
   if (!(await verifyTurnstile(env, turnstile, ip))) return j({ ok: false, error: "captcha_failed" }, 400);
 
-  // Repeat signups never re-email or re-alert (no inbox bombing through this
-  // form), and a denied email gets the same answer as everyone else.
-  const cur = await getSignup(env, email);
-  if (cur) return j({ ok: true, message: cur.status === "approved" ? "You're already approved — check your inbox for your access link." : SIGNUP_OK });
+  // Repeat signups and existing users never email or alert anyone (no inbox
+  // bombing through this form), and every case gets the same answer so the form
+  // can't be used to find out who has an account.
+  if ((await getSignup(env, email)) || (await isExistingUser(env, email))) return j({ ok: true, message: SIGNUP_OK });
 
   const rec = { email, note: String(note || "").slice(0, 500), ts: Date.now(), status: "pending", country: request.cf?.country || "" };
   await putSignup(env, rec);
@@ -679,6 +703,11 @@ export default {
       const chosen = plan || "premium";
       if (!validEmail(email)) return j({ ok: false, error: "invalid_email" }, 400);
       if (!SQUARE_PLANS[chosen]) return j({ ok: false, error: "unknown_plan", plans: Object.keys(SQUARE_PLANS) }, 400);
+      // Same per-IP limiter as signup: each call creates a Square payment link.
+      if (env.SIGNUP_LIMITER) {
+        const { success } = await env.SIGNUP_LIMITER.limit({ key: `checkout:${request.headers.get("CF-Connecting-IP") || "unknown"}` });
+        if (!success) return j({ ok: false, error: "rate_limited" }, 429);
+      }
       if (!env.SQUARE_ACCESS_TOKEN || !env.SQUARE_LOCATION_ID) return j({ ok: false, error: "square_not_configured" }, 503);
       const res = await squareCreatePaymentLink(env, chosen, email.toLowerCase(), url.origin);
       if (res.error) return j({ ok: false, ...res }, 502);
@@ -725,7 +754,7 @@ export default {
     // D1 makes this ATOMIC: `UPDATE ... WHERE balance >= n` deducts fully or not at
     // all, so concurrent messages can't double-spend.
     if (request.method === "POST" && pathname === "/api/credits/consume") {
-      if (!env.ADMIN_SECRET || request.headers.get("X-Admin-Secret") !== env.ADMIN_SECRET) {
+      if (!isAdmin(request, env)) {
         return j({ ok: false, error: "unauthorized" }, 401);
       }
       if (!env.DB) return j({ ok: false, error: "credits_not_provisioned" }, 503);
@@ -744,7 +773,7 @@ export default {
 
     // ── Tier lookup (admin): premium | credits | free ────────────────────────
     if (request.method === "GET" && pathname.startsWith("/api/tier/")) {
-      if (!env.ADMIN_SECRET || request.headers.get("X-Admin-Secret") !== env.ADMIN_SECRET) {
+      if (!isAdmin(request, env)) {
         return j({ ok: false, error: "unauthorized" }, 401);
       }
       const email = decodeURIComponent(pathname.slice("/api/tier/".length)).toLowerCase();
@@ -757,7 +786,7 @@ export default {
 
     // ── Credits: balance lookup (admin) ──────────────────────────────────────
     if (request.method === "GET" && pathname.startsWith("/api/credits/")) {
-      if (!env.ADMIN_SECRET || request.headers.get("X-Admin-Secret") !== env.ADMIN_SECRET) {
+      if (!isAdmin(request, env)) {
         return j({ ok: false, error: "unauthorized" }, 401);
       }
       const email = decodeURIComponent(pathname.slice("/api/credits/".length)).toLowerCase();
@@ -769,7 +798,7 @@ export default {
     // ── Premium list (admin only) → pod allowlist sync bridge ────────────────
     // A pod cron pulls this and merges emails into CHAD_OPERATOR_ALLOWLIST.
     if (request.method === "GET" && pathname === "/api/premium/list") {
-      if (!env.ADMIN_SECRET || request.headers.get("X-Admin-Secret") !== env.ADMIN_SECRET) {
+      if (!isAdmin(request, env)) {
         return j({ ok: false, error: "unauthorized" }, 401);
       }
       const out = [];
