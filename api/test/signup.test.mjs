@@ -171,3 +171,46 @@ test("cron drains the Access queue once ready and emails the user", async () => 
   }, "existing rules kept, read-only fields dropped");
   assert.match(sent.at(-1).subject, /access is live/);
 });
+
+test("existing users signing up again: no record, no emails, same reply", async () => {
+  // Operator address.
+  let r = await call("POST", "/api/signup", { email: "OP@example.com" });
+  assert.equal(r.status, 200);
+  const generic = r.body.message;
+  // Paid account (welcomed / premium in KV).
+  await env.INVITES.put("welcomed:paid@example.com", "1");
+  await env.INVITES.put("premium:prem@example.com", "{}");
+  await call("POST", "/api/signup", { email: "paid@example.com" });
+  await call("POST", "/api/signup", { email: "prem@example.com" });
+  // Already on the Access policy.
+  env.CF_ACCESS_READY = "1";
+  env.CF_API_TOKEN = "t";
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ success: true, result: { include: [{ email: { email: "Member@Example.com" } }] } }));
+  r = await call("POST", "/api/signup", { email: "member@example.com" });
+  assert.equal(r.body.message, generic);
+  assert.equal(sent.length, 0, "no confirmation or operator alert for existing users");
+  for (const e of ["op@example.com", "paid@example.com", "prem@example.com", "member@example.com"]) {
+    assert.equal(await env.INVITES.get(`signup:${e}`), null, `${e} must not get a signup record`);
+  }
+  // A genuinely new address still goes through (policy read OK, not listed).
+  r = await call("POST", "/api/signup", { email: "fresh@example.com" });
+  assert.deepEqual(sent.map((m) => m.to), ["fresh@example.com", "op@example.com"]);
+});
+
+test("approved repeat signup gets the generic reply (no membership leak)", async () => {
+  await call("POST", "/api/signup", { email: "a@example.com" });
+  const first = (await call("POST", "/api/signup", { email: "b@example.com" })).body.message;
+  await call("POST", "/api/signups/decide", { email: "a@example.com", action: "approve" }, admin);
+  const r = await call("POST", "/api/signup", { email: "a@example.com" });
+  assert.equal(r.body.message, first);
+});
+
+test("Access policy unreadable: treated as new (signup still works)", async () => {
+  env.CF_ACCESS_READY = "1";
+  env.CF_API_TOKEN = "t";
+  globalThis.fetch = async () => { throw new Error("network"); };
+  const r = await call("POST", "/api/signup", { email: "new2@example.com" });
+  assert.ok(r.body.ok);
+  assert.ok(await env.INVITES.get("signup:new2@example.com"));
+});
